@@ -566,6 +566,34 @@ under the License.
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>unpack</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.apache.hive</groupId>
+                                    <artifactId>hive-common</artifactId>
+                                    <version>${hive.version}</version>
+                                    <type>jar</type>
+                                    <overWrite>true</overWrite>
+                                    <outputDirectory>${project.build.directory}/classes</outputDirectory>
+                                    <excludes>
+                                        **/HiveConf.class
+                                    </excludes>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
                 <executions>
                     <execution>
@@ -586,10 +614,18 @@ under the License.
                                     <include>org.apache.hive.shims:hive-shims-0.23</include>
                                     <include>org.apache.hive:hive-serde</include>
                                     <include>org.apache.hive:hive-metastore</include>
-                                    <include>org.apache.hive:hive-storage-api</include>
+<!--                                    <include>org.apache.hive:hive-storage-api</include>-->
                                 </includes>
                             </artifactSet>
                             <relocations>
+                                <relocation>
+                                    <pattern>org.apache.hive</pattern>
+                                    <shadedPattern>org.apache.paimon.shaded.org.apache.hive</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.hive</pattern>
+                                    <shadedPattern>org.apache.paimon.shaded.org.apache.hadoop.hive</shadedPattern>
+                                </relocation>
                                 <relocation>
                                     <pattern>com.facebook.fb303</pattern>
                                     <shadedPattern>org.apache.paimon.shaded.com.facebook.fb303</shadedPattern>
