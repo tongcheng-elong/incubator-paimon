@@ -289,7 +289,7 @@ public abstract class AbstractFileStoreWrite<T>
         if (LOG.isDebugEnabled()) {
             LOG.debug("Creating writer for partition {}, bucket {}", partition, bucket);
         }
-
+        final long start_ts = System.currentTimeMillis();
         Long latestSnapshotId = snapshotManager.latestSnapshotId();
         RecordWriter<T> writer;
         if (emptyWriter) {
@@ -310,6 +310,7 @@ public abstract class AbstractFileStoreWrite<T>
                             compactExecutor());
         }
         notifyNewWriter(writer);
+        LOG.info("Creating writer for partition {}, bucket {}, time {} ms", partition, bucket, System.currentTimeMillis() - start_ts);
         return new WriterContainer<>(writer, latestSnapshotId);
     }
 
