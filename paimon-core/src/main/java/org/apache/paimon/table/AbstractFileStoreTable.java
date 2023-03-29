@@ -41,9 +41,6 @@ import org.apache.paimon.table.source.snapshot.SnapshotSplitReaderImpl;
 import org.apache.paimon.table.source.snapshot.StaticFromTimestampStartingScanner;
 import org.apache.paimon.utils.SnapshotManager;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -55,7 +52,6 @@ import static org.apache.paimon.CoreOptions.PATH;
 public abstract class AbstractFileStoreTable implements FileStoreTable {
 
     private static final long serialVersionUID = 1L;
-    protected static final Logger LOG = LoggerFactory.getLogger(AbstractFileStoreTable.class);
 
     protected final FileIO fileIO;
     protected final Path path;
@@ -203,17 +199,12 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
                 }
                 return Optional.empty();
             case FROM_TIMESTAMP:
-                try {
-                    Snapshot snapshot =
-                            StaticFromTimestampStartingScanner.getSnapshot(
-                                    snapshotManager(), coreOptions.scanTimestampMills());
-                    if (snapshot != null) {
-                        long schemaId = snapshot.schemaId();
-                        return Optional.of(schemaManager().schema(schemaId).copy(options.toMap()));
-                    }
-                } catch (Exception ex) {
-                    LOG.error("error when reading snapshot", ex);
-                    return Optional.empty();
+                Snapshot snapshot =
+                        StaticFromTimestampStartingScanner.timeTravelToTimestamp(
+                                snapshotManager(), coreOptions.scanTimestampMills());
+                if (snapshot != null) {
+                    long schemaId = snapshot.schemaId();
+                    return Optional.of(schemaManager().schema(schemaId).copy(options.toMap()));
                 }
                 return Optional.empty();
             default:
