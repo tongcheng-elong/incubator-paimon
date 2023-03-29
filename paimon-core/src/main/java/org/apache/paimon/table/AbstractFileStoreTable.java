@@ -40,6 +40,8 @@ import org.apache.paimon.table.source.snapshot.SnapshotSplitReader;
 import org.apache.paimon.table.source.snapshot.SnapshotSplitReaderImpl;
 import org.apache.paimon.table.source.snapshot.StaticFromTimestampStartingScanner;
 import org.apache.paimon.utils.SnapshotManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Objects;
@@ -52,6 +54,7 @@ import static org.apache.paimon.CoreOptions.PATH;
 public abstract class AbstractFileStoreTable implements FileStoreTable {
 
     private static final long serialVersionUID = 1L;
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractFileStoreTable.class);
 
     protected final FileIO fileIO;
     protected final Path path;
@@ -199,13 +202,19 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
                 }
                 return Optional.empty();
             case FROM_TIMESTAMP:
-                Snapshot snapshot =
-                        StaticFromTimestampStartingScanner.timeTravelToTimestamp(
-                                snapshotManager(), coreOptions.scanTimestampMills());
-                if (snapshot != null) {
-                    long schemaId = snapshot.schemaId();
-                    return Optional.of(schemaManager().schema(schemaId).copy(options.toMap()));
+                try {
+                    Snapshot snapshot =
+                            StaticFromTimestampStartingScanner.timeTravelToTimestamp(
+                                    snapshotManager(), coreOptions.scanTimestampMills());
+                    if (snapshot != null) {
+                        long schemaId = snapshot.schemaId();
+                        return Optional.of(schemaManager().schema(schemaId).copy(options.toMap()));
+                    }
+                } catch (Exception ex) {
+                    LOG.warn("Get table schema from snapshot error,snapshot maybe expired");
+                    return Optional.empty();
                 }
+
                 return Optional.empty();
             default:
                 return Optional.empty();
