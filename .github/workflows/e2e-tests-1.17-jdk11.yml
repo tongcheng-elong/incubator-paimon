@@ -16,7 +16,7 @@
 # limitations under the License.
 ################################################################################
 
-name: UTCase and ITCase Non Flink on JDK 11
+name: End to End Tests Flink 1.17 on JDK 11
 
 on:
   issue_comment:
@@ -44,12 +44,12 @@ jobs:
         with:
           java-version: ${{ env.JDK_VERSION }}
           distribution: 'adopt'
-      - name: Build
+      - name: Build Flink 1.17
         run: ./mvnw clean install -DskipTests
-      - name: Test
+      - name: Test Flink 1.17
         run: |
           # run tests with random timezone to find out timezone related bugs
           . .github/workflows/utils.sh
           jvm_timezone=$(random_timezone)
           echo "JVM timezone is set to $jvm_timezone"
-          ./mvnw clean install -pl '!paimon-e2e-tests,!org.apache.paimon:paimon-flink-common' -Duser.timezone=$jvm_timezone
+          ./mvnw test -pl paimon-e2e-tests -Duser.timezone=$jvm_timezone

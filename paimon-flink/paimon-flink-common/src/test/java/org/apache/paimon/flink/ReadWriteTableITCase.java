@@ -57,7 +57,11 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.apache.flink.table.planner.factories.TestValuesTableFactory.changelogRow;
+import static org.apache.paimon.CoreOptions.BUCKET;
+import static org.apache.paimon.CoreOptions.SOURCE_SPLIT_OPEN_FILE_COST;
+import static org.apache.paimon.CoreOptions.SOURCE_SPLIT_TARGET_SIZE;
 import static org.apache.paimon.flink.AbstractFlinkTableFactory.buildPaimonTable;
+import static org.apache.paimon.flink.FlinkConnectorOptions.INFER_SCAN_PARALLELISM;
 import static org.apache.paimon.flink.FlinkConnectorOptions.SCAN_PARALLELISM;
 import static org.apache.paimon.flink.FlinkConnectorOptions.SINK_PARALLELISM;
 import static org.apache.paimon.flink.FlinkTestBase.createResolvedTable;
@@ -79,6 +83,7 @@ import static org.apache.paimon.flink.util.ReadWriteTableTestUtil.sEnv;
 import static org.apache.paimon.flink.util.ReadWriteTableTestUtil.testBatchRead;
 import static org.apache.paimon.flink.util.ReadWriteTableTestUtil.testStreamingRead;
 import static org.apache.paimon.flink.util.ReadWriteTableTestUtil.validateStreamingReadResult;
+import static org.apache.paimon.flink.util.ReadWriteTableTestUtil.warehouse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -189,6 +194,43 @@ public class ReadWriteTableITCase extends AbstractTestBase {
                 Arrays.asList(
                         changelogRow("+I", "US Dollar", "2022-01-01"),
                         changelogRow("+I", "Euro", "2022-01-01")));
+    }
+
+    @Test
+    public void testNaNType() throws Exception {
+        bEnv.executeSql(
+                "CREATE TEMPORARY TABLE S ( a DOUBLE,b DOUBLE,c STRING) WITH ( 'connector' = 'filesystem', 'format'='json' , 'path' ='"
+                        + warehouse
+                        + "/S' )");
+        bEnv.executeSql(
+                        "INSERT INTO S VALUES "
+                                + "(1.0,2.0,'a'),\n"
+                                + "(0.0,0.0,'b'),\n"
+                                + "(1.0,1.0,'c'),\n"
+                                + "(0.0,0.0,'d'),\n"
+                                + "(1.0,0.0,'e'),\n"
+                                + "(0.0,0.0,'f'),\n"
+                                + "(-1.0,0.0,'g'),\n"
+                                + "(1.0,-1.0,'h'),\n"
+                                + "(1.0,-2.0,'i')")
+                .await();
+
+        bEnv.executeSql("CREATE TABLE T (d STRING, e DOUBLE)");
+        bEnv.executeSql("INSERT INTO T SELECT c,a/b FROM S").await();
+
+        BlockingIterator<Row, Row> iterator =
+                BlockingIterator.of(bEnv.executeSql("SELECT * FROM  T").collect());
+        assertThat(iterator.collect(9))
+                .containsExactlyInAnyOrder(
+                        Row.of("a", 0.5),
+                        Row.of("b", Double.NaN),
+                        Row.of("c", 1.0),
+                        Row.of("d", Double.NaN),
+                        Row.of("e", Double.POSITIVE_INFINITY),
+                        Row.of("f", Double.NaN),
+                        Row.of("g", Double.NEGATIVE_INFINITY),
+                        Row.of("h", -1.0),
+                        Row.of("i", -0.5));
     }
 
     @Test
@@ -1111,10 +1153,122 @@ public class ReadWriteTableITCase extends AbstractTestBase {
                                         "",
                                         new HashMap<String, String>() {
                                             {
+                                                put(INFER_SCAN_PARALLELISM.key(), "false");
                                                 put(SCAN_PARALLELISM.key(), "66");
                                             }
                                         })))
                 .isEqualTo(66);
+    }
+
+    @Test
+    public void testInferParallelism() throws Exception {
+        String table =
+                createTable(
+                        Arrays.asList("currency STRING", "rate BIGINT"),
+                        Collections.emptyList(),
+                        Collections.emptyList(),
+                        new HashMap<String, String>() {
+                            {
+                                put(SOURCE_SPLIT_OPEN_FILE_COST.key(), "1KB");
+                                put(SOURCE_SPLIT_TARGET_SIZE.key(), "1KB");
+                                put(BUCKET.key(), "2");
+                            }
+                        });
+        // Empty table, infer parallelism should be at least 1
+        assertThat(
+                        sourceParallelism(
+                                buildQueryWithTableOptions(
+                                        table,
+                                        "*",
+                                        "",
+                                        new HashMap<String, String>() {
+                                            {
+                                                put(INFER_SCAN_PARALLELISM.key(), "true");
+                                            }
+                                        })))
+                .isEqualTo(1);
+
+        // error scan.parallelism, infer parallelism should be at least 1
+        assertThat(
+                        sourceParallelism(
+                                buildQueryWithTableOptions(
+                                        table,
+                                        "*",
+                                        "",
+                                        new HashMap<String, String>() {
+                                            {
+                                                put(INFER_SCAN_PARALLELISM.key(), "true");
+                                                put(SCAN_PARALLELISM.key(), "-1");
+                                            }
+                                        })))
+                .isEqualTo(1);
+
+        // 2 splits, the parallelism is splits num: 2
+        insertInto(table, "('Euro', 119)");
+        insertInto(table, "('US Dollar', 102)");
+        assertThat(
+                        sourceParallelism(
+                                buildQueryWithTableOptions(
+                                        table,
+                                        "*",
+                                        "",
+                                        new HashMap<String, String>() {
+                                            {
+                                                put(INFER_SCAN_PARALLELISM.key(), "true");
+                                            }
+                                        })))
+                .isEqualTo(2);
+
+        // 2 splits and limit is 1, the parallelism is the limit value : 1
+        assertThat(
+                        sourceParallelism(
+                                buildQueryWithTableOptions(
+                                        table,
+                                        "*",
+                                        "",
+                                        1L,
+                                        new HashMap<String, String>() {
+                                            {
+                                                put(INFER_SCAN_PARALLELISM.key(), "true");
+                                            }
+                                        })))
+                .isEqualTo(1);
+
+        // 2 splits, limit is 3, the parallelism is infer parallelism : 2
+        assertThat(
+                        sourceParallelism(
+                                buildQueryWithTableOptions(
+                                        table,
+                                        "*",
+                                        "",
+                                        3L,
+                                        new HashMap<String, String>() {
+                                            {
+                                                put(INFER_SCAN_PARALLELISM.key(), "true");
+                                            }
+                                        })))
+                .isEqualTo(1);
+
+        // 2 splits, infer parallelism is disabled, the parallelism is scan.parallelism
+        assertThat(
+                        sourceParallelism(
+                                buildQueryWithTableOptions(
+                                        table,
+                                        "*",
+                                        "",
+                                        new HashMap<String, String>() {
+                                            {
+                                                put(INFER_SCAN_PARALLELISM.key(), "false");
+                                                put(SCAN_PARALLELISM.key(), "3");
+                                            }
+                                        })))
+                .isEqualTo(3);
+
+        // for streaming mode
+        assertThat(
+                        sourceParallelismStreaming(
+                                buildQueryWithTableOptions(table, "*", "", new HashMap<>())))
+                .isEqualTo(2);
     }
 
     @Test
@@ -1203,6 +1357,12 @@ public class ReadWriteTableITCase extends AbstractTestBase {
     private int sourceParallelism(String sql) {
         DataStream<Row> stream =
                 ((StreamTableEnvironment) bEnv).toChangelogStream(bEnv.sqlQuery(sql));
+        return stream.getParallelism();
+    }
+
+    private int sourceParallelismStreaming(String sql) {
+        DataStream<Row> stream =
+                ((StreamTableEnvironment) sEnv).toChangelogStream(sEnv.sqlQuery(sql));
         return stream.getParallelism();
     }
 
