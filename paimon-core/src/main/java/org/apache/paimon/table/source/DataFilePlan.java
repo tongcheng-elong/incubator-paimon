@@ -16,24 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.paimon.flink;
+package org.apache.paimon.table.source;
 
-import org.apache.paimon.catalog.CatalogContext;
-import org.apache.paimon.options.Options;
+import org.apache.paimon.table.source.snapshot.StartingScanner;
 
-import org.apache.flink.configuration.ReadableConfig;
+import javax.annotation.Nullable;
 
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
-/** Utils for Flink. */
-public class FlinkUtils {
+/** Scanning plan containing snapshot ID and input splits. */
+public class DataFilePlan implements TableScan.Plan {
 
-    public static CatalogContext createCatalogContext(
-            Map<String, String> options, ReadableConfig flinkConf) {
-        return CatalogContext.create(
-                Options.fromMap(options),
-                HadoopUtils.getHadoopConfiguration(
-                        TableConfigUtils.extractConfiguration(flinkConf)),
-                new FlinkFileIOLoader());
+    private final List<DataSplit> splits;
+
+    public DataFilePlan(List<DataSplit> splits) {
+        this.splits = splits;
+    }
+
+    @Override
+    public List<Split> splits() {
+        return new ArrayList<>(splits);
+    }
+
+    public static DataFilePlan fromResult(@Nullable StartingScanner.Result result) {
+        return new DataFilePlan(result == null ? Collections.emptyList() : result.splits());
     }
 }

@@ -300,9 +300,10 @@ public class CoreOptions implements Serializable {
                                     + "which is not cost-effective.");
 
     public static final ConfigOption<Integer> COMPACTION_MAX_FILE_NUM =
-            key("compaction.early-max.file-num")
+            key("compaction.max.file-num")
                     .intType()
                     .defaultValue(50)
+                    .withDeprecatedKeys("compaction.early-max.file-num")
                     .withDescription(
                             "For file set [f_0,...,f_N], the maximum file number to trigger a compaction "
                                     + "for append-only table, even if sum(size(f_i)) < targetFileSize. This value "
@@ -550,6 +551,22 @@ public class CoreOptions implements Serializable {
                     .defaultValue(true)
                     .withDescription(
                             "Should assert disorder files, this just for compatibility with older versions.");
+
+    public static final ConfigOption<Integer> FULL_COMPACTION_DELTA_COMMITS =
+            key("full-compaction.delta-commits")
+                    .intType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Full compaction will be constantly triggered after delta commits.");
+
+    @ExcludeFromDocumentation("Internal use only")
+    public static final ConfigOption<Boolean> STREAMING_COMPACT =
+            key("streaming-compact")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Only used to force TableScan to construct 'ContinuousCompactorStartingScanner' and "
+                                    + "'ContinuousCompactorFollowUpScanner' for dedicated streaming compaction job.");
 
     private final Options options;
 
@@ -860,7 +877,8 @@ public class CoreOptions implements Serializable {
                 "For streaming sources, produces a snapshot after the latest compaction on the table "
                         + "upon first startup, and continue to read the latest changes. "
                         + "For batch sources, just produce a snapshot after the latest compaction "
-                        + "but does not read new changes."),
+                        + "but does not read new changes. Snapshots of full compaction are picked "
+                        + "when scheduled full-compaction is enabled."),
 
         FROM_TIMESTAMP(
                 "from-timestamp",

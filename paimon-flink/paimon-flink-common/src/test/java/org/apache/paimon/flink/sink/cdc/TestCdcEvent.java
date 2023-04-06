@@ -18,7 +18,6 @@
 
 package org.apache.paimon.flink.sink.cdc;
 
-import org.apache.paimon.cdc.CdcRecord;
 import org.apache.paimon.schema.SchemaChange;
 
 import java.io.Serializable;

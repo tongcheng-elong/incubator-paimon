@@ -26,13 +26,12 @@ import org.apache.paimon.flink.utils.TableScanUtils;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.predicate.Predicate;
 import org.apache.paimon.predicate.PredicateFilter;
+import org.apache.paimon.shade.guava30.com.google.common.primitives.Ints;
 import org.apache.paimon.table.Table;
-import org.apache.paimon.table.source.TableStreamingReader;
 import org.apache.paimon.types.RowType;
 import org.apache.paimon.utils.FileIOUtils;
 import org.apache.paimon.utils.TypeUtils;
 
-import org.apache.flink.shaded.guava30.com.google.common.primitives.Ints;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.FunctionContext;
@@ -86,8 +85,15 @@ public class FileStoreLookupFunction implements Serializable, Closeable {
     public FileStoreLookupFunction(
             Table table, int[] projection, int[] joinKeyIndex, @Nullable Predicate predicate) {
         checkArgument(
-                table.partitionKeys().isEmpty(), "Currently only support non-partitioned table.");
-        checkArgument(table.primaryKeys().size() > 0, "Currently only support primary key table.");
+                table.partitionKeys().isEmpty(),
+                String.format(
+                        "Currently only support non-partitioned table, the lookup table is [%s].",
+                        table.name()));
+        checkArgument(
+                table.primaryKeys().size() > 0,
+                String.format(
+                        "Currently only support primary key table, the lookup table is [%s].",
+                        table.name()));
         TableScanUtils.streamingReadingValidate(table);
 
         this.table = table;

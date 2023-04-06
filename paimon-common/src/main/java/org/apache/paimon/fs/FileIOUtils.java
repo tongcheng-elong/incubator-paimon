@@ -16,27 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.paimon.table.source;
+package org.apache.paimon.fs;
 
-import org.apache.paimon.operation.ScanKind;
-import org.apache.paimon.predicate.Predicate;
-import org.apache.paimon.table.source.snapshot.StartingScanner;
-import org.apache.paimon.utils.Filter;
+import java.io.IOException;
 
-/** {@link DataTableScan} for batch planning. */
-public interface BatchDataTableScan extends DataTableScan {
+/** Utils for {@link FileIO}. */
+public class FileIOUtils {
 
-    @Override
-    BatchDataTableScan withSnapshot(long snapshotId);
+    public static FileIOLoader checkAccess(FileIOLoader fileIO, Path path) {
+        try {
+            if (fileIO == null) {
+                return null;
+            }
 
-    @Override
-    BatchDataTableScan withFilter(Predicate predicate);
-
-    @Override
-    BatchDataTableScan withKind(ScanKind scanKind);
-
-    @Override
-    BatchDataTableScan withLevelFilter(Filter<Integer> levelFilter);
-
-    BatchDataTableScan withStartingScanner(StartingScanner startingScanner);
+            // check access
+            fileIO.load(path).exists(path);
+            return fileIO;
+        } catch (IOException ignore) {
+            return null;
+        }
+    }
 }

@@ -54,6 +54,8 @@ import java.util.TreeSet;
 /**
  * {@link StoreSinkWrite} for {@link CoreOptions.ChangelogProducer#FULL_COMPACTION} changelog
  * producer. This writer will perform full compaction once in a while.
+ *
+ * @deprecated use {@link GlobalFullCompactionSinkWrite}.
  */
 public class FullChangelogStoreSinkWrite extends StoreSinkWriteImpl {
 
@@ -80,7 +82,7 @@ public class FullChangelogStoreSinkWrite extends StoreSinkWriteImpl {
             boolean isOverwrite,
             long fullCompactionThresholdMs)
             throws Exception {
-        super(table, context, initialCommitUser, ioManager, isOverwrite);
+        super(table, context, initialCommitUser, ioManager, isOverwrite, false);
 
         this.snapshotManager = table.snapshotManager();
         this.fullCompactionThresholdMs = fullCompactionThresholdMs;

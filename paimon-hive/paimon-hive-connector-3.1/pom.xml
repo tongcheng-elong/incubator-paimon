@@ -67,7 +67,7 @@ under the License.
 
         <dependency>
             <groupId>org.apache.paimon</groupId>
-            <artifactId>paimon-shade</artifactId>
+            <artifactId>paimon-bundle</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
@@ -436,6 +436,10 @@ under the License.
                     <groupId>org.pentaho</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hbase</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
 
@@ -467,6 +471,10 @@ under the License.
                 </exclusion>
                 <exclusion>
                     <groupId>org.pentaho</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hbase</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
