@@ -24,6 +24,7 @@ import org.apache.paimon.fs.FileIO;
 import org.apache.paimon.fs.FileStatus;
 import org.apache.paimon.fs.Path;
 import org.apache.paimon.reader.RecordReader;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +56,7 @@ public class FileUtils {
                 };
         LOG.info("runtime availableProcessors:{}", Runtime.getRuntime().availableProcessors());
         COMMON_IO_FORK_JOIN_POOL =
-                new ForkJoinPool(20, factory, null, false);
+                new ForkJoinPool(Runtime.getRuntime().availableProcessors(), factory, null, false);
     }
 
     public static <T> List<T> readListFromFile(

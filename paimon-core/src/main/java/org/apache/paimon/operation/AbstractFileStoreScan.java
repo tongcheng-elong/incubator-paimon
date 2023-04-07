@@ -38,6 +38,9 @@ import org.apache.paimon.utils.Preconditions;
 import org.apache.paimon.utils.RowDataToObjectArrayConverter;
 import org.apache.paimon.utils.SnapshotManager;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
@@ -52,6 +55,7 @@ import java.util.stream.Collectors;
 /** Default implementation of {@link FileStoreScan}. */
 public abstract class AbstractFileStoreScan implements FileStoreScan {
 
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractFileStoreScan.class);
     private final FieldStatsArraySerializer partitionStatsConverter;
     private final RowDataToObjectArrayConverter partitionConverter;
     protected final RowType bucketKeyType;
@@ -189,6 +193,7 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
 
         final Long readSnapshot = snapshotId;
         final List<ManifestFileMeta> readManifests = manifests;
+        LOG.info("ReadManifests count : {}", readManifests.size());
 
         List<ManifestEntry> entries;
         try {
