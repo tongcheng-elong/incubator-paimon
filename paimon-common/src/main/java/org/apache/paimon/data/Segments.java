@@ -16,32 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.paimon.table.source;
+package org.apache.paimon.data;
 
-import org.apache.paimon.table.source.snapshot.StartingScanner;
+import org.apache.paimon.memory.MemorySegment;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
-/** Scanning plan containing snapshot ID and input splits. */
-public class DataFilePlan implements TableScan.Plan {
+/** Segments with limit in last segment. */
+public class Segments {
 
-    private final List<DataSplit> splits;
+    private final ArrayList<MemorySegment> segments;
 
-    public DataFilePlan(List<DataSplit> splits) {
-        this.splits = splits;
+    private final int limitInLastSegment;
+
+    public Segments(ArrayList<MemorySegment> segments, int limitInLastSegment) {
+        this.segments = segments;
+        this.limitInLastSegment = limitInLastSegment;
     }
 
-    @Override
-    public List<Split> splits() {
-        return new ArrayList<>(splits);
+    public ArrayList<MemorySegment> segments() {
+        return segments;
     }
 
-    public static DataFilePlan fromResult(StartingScanner.Result result) {
-        return new DataFilePlan(
-                result instanceof StartingScanner.ScannedResult
-                        ? ((StartingScanner.ScannedResult) result).splits()
-                        : Collections.emptyList());
+    public int limitInLastSegment() {
+        return limitInLastSegment;
     }
 }
