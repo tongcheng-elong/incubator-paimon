@@ -477,6 +477,7 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                                 .withPartitionFilter(partitionFilter)
                                 .plan()
                                 .files();
+                LOG.info("Overwriting {} files", currentEntries.size());
                 for (ManifestEntry entry : currentEntries) {
                     changesWithOverwrite.add(
                             new ManifestEntry(
@@ -706,10 +707,12 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                         .distinct()
                         .collect(Collectors.toList());
         try {
-            return scan.withSnapshot(snapshotId)
+            List<ManifestEntry> entries = scan.withSnapshot(snapshotId)
                     .withPartitionFilter(changedPartitions)
                     .plan()
                     .files();
+            LOG.info("Read {} manifest entries from changed partitions.", entries.size());
+            return entries;
         } catch (Throwable e) {
             throw new RuntimeException("Cannot read manifest entries from changed partitions.", e);
         }
