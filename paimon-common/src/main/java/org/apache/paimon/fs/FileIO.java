@@ -246,9 +246,6 @@ public interface FileIO extends Serializable {
         }
 
         Map<String, FileIOLoader> loaders = discoverLoaders();
-        if(loaders.containsKey("hdfs")) {
-            loaders.put("viewfs", loaders.get("hdfs"));
-        }
         FileIOLoader loader = loaders.get(uri.getScheme());
 
         // load fallbackIO
