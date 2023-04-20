@@ -21,7 +21,7 @@ package org.apache.paimon.fs.hadoop;
 import org.apache.paimon.fs.FileIOLoader;
 import org.apache.paimon.fs.Path;
 
-/** Viewfs {@link FileIOLoader} to load {@link HadoopFileIO}. */
+/** {@link FileIOLoader} to load {@link HadoopFileIO}. */
 public class HadoopViewFsFileIOLoader implements FileIOLoader {
 
     @Override

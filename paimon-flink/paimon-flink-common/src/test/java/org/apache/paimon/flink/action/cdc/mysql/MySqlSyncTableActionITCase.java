@@ -341,6 +341,14 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
     @Test
     @Timeout(30)
     public void testAllTypes() throws Exception {
+        // the first round checks for table creation
+        // the second round checks for running the action on an existing table
+        for (int i = 0; i < 2; i++) {
+            testAllTypesImpl();
+        }
+    }
+
+    private void testAllTypesImpl() throws Exception {
         Map<String, String> mySqlConfig = getBasicMySqlConfig();
         mySqlConfig.put("database-name", DATABASE_NAME);
         mySqlConfig.put("table-name", "all_types_table");
@@ -356,17 +364,18 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
                         warehouse,
                         database,
                         tableName,
-                        Collections.emptyList(),
-                        Collections.emptyList(),
+                        Collections.singletonList("pt"),
+                        Arrays.asList("pt", "_id"),
                         Collections.emptyMap(),
                         Collections.emptyMap());
         action.build(env);
-        env.executeAsync();
+        JobClient jobClient = env.executeAsync();
 
         RowType rowType =
                 RowType.of(
                         new DataType[] {
                             DataTypes.INT().notNull(), // _id
+                            DataTypes.DECIMAL(2, 1).notNull(), // pt
                             DataTypes.BOOLEAN(), // _boolean
                             DataTypes.TINYINT(), // _tinyint
                             DataTypes.SMALLINT(), // _tinyint_unsigned
@@ -415,12 +424,15 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
                             DataTypes.CHAR(10), // _char
                             DataTypes.VARCHAR(20), // _varchar
                             DataTypes.STRING(), // _text
+                            DataTypes.STRING(), // _longtext
                             DataTypes.BINARY(10), // _bin
                             DataTypes.VARBINARY(20), // _varbin
-                            DataTypes.BYTES() // _blob
+                            DataTypes.BYTES(), // _blob
+                            DataTypes.BYTES() // _longblob
                         },
                         new String[] {
                             "_id",
+                            "pt",
                             "_boolean",
                             "_tinyint",
                             "_tinyint_unsigned",
@@ -469,15 +481,18 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
                             "_char",
                             "_varchar",
                             "_text",
+                            "_longtext",
                             "_bin",
                             "_varbin",
-                            "_blob"
+                            "_blob",
+                            "_longblob"
                         });
         FileStoreTable table = getFileStoreTable();
         List<String> expected =
                 Arrays.asList(
                         "+I["
-                                + "1, true, 1, 2, 3, "
+                                + "1, 1.1, "
+                                + "true, 1, 2, 3, "
                                 + "1000, 2000, 3000, "
                                 + "100000, 200000, 300000, "
                                 + "1000000, 2000000, 3000000, "
@@ -490,16 +505,23 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
                                 + "1.2345678987654322E32, 1.2345678987654322E32, 1.2345678987654322E32, "
                                 + "11111, 22222, 33333, "
                                 + "19439, "
+                                // display value of datetime is not affected by timezone
                                 + "2023-03-23T14:30:05, 2023-03-23T14:30:05.123, 2023-03-23T14:30:05.123456, "
                                 + "2023-03-24T14:30, 2023-03-24T14:30:05.120, "
-                                + "2023-03-23T15:00:10.123456, "
-                                + "Paimon, Apache Paimon, Apache Paimon MySQL Test Data, "
+                                // display value of timestamp is affected by timezone
+                                // we store 2023-03-23T15:00:10.123456 in UTC-8 system timezone
+                                // and query this timestamp in UTC-5 MySQL server timezone
+                                // so the display value should increase by 3 hour
+                                + "2023-03-23T18:00:10.123456, "
+                                + "Paimon, Apache Paimon, Apache Paimon MySQL Test Data, Apache Paimon MySQL Long Test Data, "
                                 + "[98, 121, 116, 101, 115, 0, 0, 0, 0, 0], "
                                 + "[109, 111, 114, 101, 32, 98, 121, 116, 101, 115], "
-                                + "[118, 101, 114, 121, 32, 108, 111, 110, 103, 32, 98, 121, 116, 101, 115, 32, 116, 101, 115, 116, 32, 100, 97, 116, 97]"
+                                + "[118, 101, 114, 121, 32, 108, 111, 110, 103, 32, 98, 121, 116, 101, 115, 32, 116, 101, 115, 116, 32, 100, 97, 116, 97], "
+                                + "[108, 111, 110, 103, 32, 98, 108, 111, 98, 32, 98, 121, 116, 101, 115, 32, 116, 101, 115, 116, 32, 100, 97, 116, 97]"
                                 + "]",
                         "+I["
-                                + "2, NULL, NULL, NULL, NULL, "
+                                + "2, 2.2, "
+                                + "NULL, NULL, NULL, NULL, "
                                 + "NULL, NULL, NULL, "
                                 + "NULL, NULL, NULL, "
                                 + "NULL, NULL, NULL, "
@@ -515,10 +537,12 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
                                 + "NULL, NULL, NULL, "
                                 + "NULL, NULL, "
                                 + "NULL, "
-                                + "NULL, NULL, NULL, "
-                                + "NULL, NULL, NULL"
+                                + "NULL, NULL, NULL, NULL, "
+                                + "NULL, NULL, NULL, NULL"
                                 + "]");
-        waitForResult(expected, table, rowType, Collections.singletonList("_id"));
+        waitForResult(expected, table, rowType, Arrays.asList("pt", "_id"));
+
+        jobClient.cancel().get();
     }
 
     @Test
