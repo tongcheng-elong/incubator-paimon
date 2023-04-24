@@ -14,7 +14,6 @@
  */
 package org.apache.hadoop.hive.conf;
 
-import com.google.common.base.Joiner;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.FileUtils;
@@ -27,6 +26,7 @@ import org.apache.hadoop.mapreduce.lib.input.CombineFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hive.common.HiveCompat;
+import org.apache.paimon.shade.guava30.com.google.common.base.Joiner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
