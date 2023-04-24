@@ -24,12 +24,11 @@ import org.apache.paimon.manifest.ManifestEntry;
 import org.apache.paimon.manifest.ManifestFileMeta;
 import org.apache.paimon.manifest.ManifestList;
 import org.apache.paimon.operation.FileStoreScan;
+import org.apache.paimon.utils.JsonSerdeUtil;
+
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonGetter;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.paimon.utils.JsonSerdeUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -62,7 +61,6 @@ import java.util.Map;
  */
 public class Snapshot {
 
-    private static final Logger LOG = LoggerFactory.getLogger(Snapshot.class);
     public static final long FIRST_SNAPSHOT_ID = 1;
 
     public static final int TABLE_STORE_02_VERSION = 1;
@@ -369,7 +367,6 @@ public class Snapshot {
     }
 
     public static long recordCount(List<ManifestEntry> manifestEntries) {
-        LOG.info("Counting record count of {} manifest entries", manifestEntries.size());
         return manifestEntries.stream().mapToLong(manifest -> manifest.file().rowCount()).sum();
     }
 
