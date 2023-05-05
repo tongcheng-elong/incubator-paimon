@@ -44,14 +44,13 @@ public class HiveCatalogTest extends CatalogTestBase {
         HiveConf hiveConf = new HiveConf();
         String jdoConnectionURL = "jdbc:derby:memory:" + UUID.randomUUID();
         hiveConf.setVar(METASTORECONNECTURLKEY, jdoConnectionURL + ";create=true");
-        hiveConf.setVar(HiveConf.ConfVars.METASTOREWAREHOUSE, warehouse);
         HiveMetaStoreClient metaStoreClient = new HiveMetaStoreClient(hiveConf);
         String metastoreClientClass = "org.apache.hadoop.hive.metastore.HiveMetaStoreClient";
         try (MockedStatic<HiveCatalog> mocked = Mockito.mockStatic(HiveCatalog.class)) {
             mocked.when(() -> HiveCatalog.createClient(hiveConf, metastoreClientClass))
                     .thenReturn(metaStoreClient);
         }
-        catalog = new HiveCatalog(fileIO, hiveConf, metastoreClientClass);
+        catalog = new HiveCatalog(fileIO, hiveConf, metastoreClientClass, warehouse);
     }
 
     @Test
@@ -72,7 +71,8 @@ public class HiveCatalogTest extends CatalogTestBase {
                                         DEFAULT_TABLE_SCHEMA,
                                         false))
                 .hasRootCauseInstanceOf(IllegalStateException.class)
-                .hasRootCauseMessage("Database name[TEST_DB] cannot contain upper case");
+                .hasRootCauseMessage(
+                        "Database name[TEST_DB] cannot contain upper case in hive catalog");
 
         assertThatThrownBy(
                         () ->
@@ -81,6 +81,38 @@ public class HiveCatalogTest extends CatalogTestBase {
                                         DEFAULT_TABLE_SCHEMA,
                                         false))
                 .hasRootCauseInstanceOf(IllegalStateException.class)
-                .hasRootCauseMessage("Table name[NEW_TABLE] cannot contain upper case");
+                .hasRootCauseMessage(
+                        "Table name[NEW_TABLE] cannot contain upper case in hive catalog");
+    }
+
+    private static final String HADOOP_CONF_DIR =
+            Thread.currentThread().getContextClassLoader().getResource("hadoop-conf-dir").getPath();
+
+    private static final String HIVE_CONF_DIR =
+            Thread.currentThread().getContextClassLoader().getResource("hive-conf-dir").getPath();
+
+    @Test
+    public void testHadoopConfDir() {
+        HiveConf hiveConf = HiveCatalog.createHiveConf(null, HADOOP_CONF_DIR);
+        assertThat(hiveConf.get("fs.defaultFS")).isEqualTo("dummy-fs");
+    }
+
+    @Test
+    public void testHiveConfDir() {
+        try {
+            testHiveConfDirImpl();
+        } finally {
+            cleanUpHiveConfDir();
+        }
+    }
+
+    private void testHiveConfDirImpl() {
+        HiveConf hiveConf = HiveCatalog.createHiveConf(HIVE_CONF_DIR, null);
+        assertThat(hiveConf.get("hive.metastore.uris")).isEqualTo("dummy-hms");
+    }
+
+    private void cleanUpHiveConfDir() {
+        // reset back to default value
+        HiveConf.setHiveSiteLocation(HiveConf.class.getClassLoader().getResource("hive-site.xml"));
     }
 }

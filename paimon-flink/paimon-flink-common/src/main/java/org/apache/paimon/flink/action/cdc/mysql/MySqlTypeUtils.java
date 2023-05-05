@@ -98,6 +98,13 @@ public class MySqlTypeUtils {
     private static final String SET = "SET";
     private static final String ENUM = "ENUM";
     private static final String GEOMETRY = "GEOMETRY";
+    private static final String POINT = "POINT";
+    private static final String LINESTRING = "LINESTRING";
+    private static final String POLYGON = "POLYGON";
+    private static final String MULTIPOINT = "MULTIPOINT";
+    private static final String MULTILINESTRING = "MULTILINESTRING";
+    private static final String MULTIPOLYGON = "MULTIPOLYGON";
+    private static final String GEOMETRYCOLLECTION = "GEOMETRYCOLLECTION";
     private static final String UNKNOWN = "UNKNOWN";
 
     // This length is from JDBC.
@@ -171,7 +178,9 @@ public class MySqlTypeUtils {
             case DATETIME:
             case TIMESTAMP:
                 if (length == null) {
-                    return DataTypes.TIMESTAMP();
+                    // default precision is 0
+                    // see https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-syntax.html
+                    return DataTypes.TIMESTAMP(0);
                 } else if (length >= JDBC_TIMESTAMP_BASE_LENGTH) {
                     if (length > JDBC_TIMESTAMP_BASE_LENGTH + 1) {
                         // Timestamp with a fraction of seconds.
@@ -184,7 +193,10 @@ public class MySqlTypeUtils {
                 } else if (length >= 0 && length <= TimestampType.MAX_PRECISION) {
                     return DataTypes.TIMESTAMP(length);
                 } else {
-                    return DataTypes.TIMESTAMP();
+                    throw new UnsupportedOperationException(
+                            "Unsupported length "
+                                    + length
+                                    + " for MySQL DATETIME and TIMESTAMP types");
                 }
             case CHAR:
                 return DataTypes.CHAR(Preconditions.checkNotNull(length));
@@ -196,6 +208,14 @@ public class MySqlTypeUtils {
             case LONGTEXT:
             case JSON:
             case ENUM:
+            case GEOMETRY:
+            case POINT:
+            case LINESTRING:
+            case POLYGON:
+            case MULTIPOINT:
+            case MULTILINESTRING:
+            case MULTIPOLYGON:
+            case GEOMETRYCOLLECTION:
                 return DataTypes.STRING();
             case BINARY:
                 return DataTypes.BINARY(Preconditions.checkNotNull(length));

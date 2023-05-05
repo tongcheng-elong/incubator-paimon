@@ -113,6 +113,14 @@ public class CoreOptions implements Serializable {
                                     + "could be NONE, ZLIB, SNAPPY, LZO, LZ4, for parquet file format, the compression value could be "
                                     + "UNCOMPRESSED, SNAPPY, GZIP, LZO, BROTLI, LZ4, ZSTD.");
 
+    public static final ConfigOption<String> FILE_COMPRESSION =
+            key("file.compression")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Default file compression format, can be overridden by "
+                                    + FILE_COMPRESSION_PER_LEVEL.key());
+
     public static final ConfigOption<FileFormatType> MANIFEST_FORMAT =
             key("manifest.format")
                     .enumType(FileFormatType.class)
@@ -178,11 +186,17 @@ public class CoreOptions implements Serializable {
                     .defaultValue(false)
                     .withDescription("Whether to ignore delete records in partial-update mode.");
 
+    public static final ConfigOption<SortEngine> SORT_ENGINE =
+            key("sort-engine")
+                    .enumType(SortEngine.class)
+                    .defaultValue(SortEngine.LOSER_TREE)
+                    .withDescription("Specify the sort engine for table with primary key.");
+
     @Immutable
     public static final ConfigOption<WriteMode> WRITE_MODE =
             key("write-mode")
                     .enumType(WriteMode.class)
-                    .defaultValue(WriteMode.CHANGE_LOG)
+                    .defaultValue(WriteMode.AUTO)
                     .withDescription("Specify the write mode for table.");
 
     public static final ConfigOption<Boolean> WRITE_ONLY =
@@ -550,6 +564,13 @@ public class CoreOptions implements Serializable {
                     .defaultValue(1024)
                     .withDescription("Read batch size for orc and parquet.");
 
+    public static final ConfigOption<String> CONSUMER_ID =
+            key("consumer-id")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Consumer id for recording the offset of consumption in the storage.");
+
     @Deprecated
     @ExcludeFromDocumentation("For compatibility with older versions")
     public static final ConfigOption<Boolean> APPEND_ONLY_ASSERT_DISORDER =
@@ -674,6 +695,10 @@ public class CoreOptions implements Serializable {
                 .collect(Collectors.toMap(e -> Integer.valueOf(e.getKey()), Map.Entry::getValue));
     }
 
+    public String fileCompression() {
+        return options.get(FILE_COMPRESSION);
+    }
+
     public int snapshotNumRetainMin() {
         return options.get(SNAPSHOT_NUM_RETAINED_MIN);
     }
@@ -692,6 +717,10 @@ public class CoreOptions implements Serializable {
 
     public MergeEngine mergeEngine() {
         return options.get(MERGE_ENGINE);
+    }
+
+    public SortEngine sortEngine() {
+        return options.get(SORT_ENGINE);
     }
 
     public long splitTargetSize() {
@@ -853,6 +882,10 @@ public class CoreOptions implements Serializable {
 
     public int readBatchSize() {
         return options.get(READ_BATCH_SIZE);
+    }
+
+    public String consumerId() {
+        return options.get(CONSUMER_ID);
     }
 
     public static StreamingReadMode streamReadType(Options options) {
@@ -1178,5 +1211,31 @@ public class CoreOptions implements Serializable {
             }
         }
         return immutableKeys;
+    }
+
+    /** Specifies the sort engine for table with primary key. */
+    public enum SortEngine implements DescribedEnum {
+        MIN_HEAP("min-heap", "Use min-heap for multiway sorting."),
+        LOSER_TREE(
+                "loser-tree",
+                "Use loser-tree for multiway sorting. Compared with heapsort, loser-tree has fewer comparisons and is more efficient.");
+
+        private final String value;
+        private final String description;
+
+        SortEngine(String value, String description) {
+            this.value = value;
+            this.description = description;
+        }
+
+        @Override
+        public String toString() {
+            return value;
+        }
+
+        @Override
+        public InlineElement getDescription() {
+            return text(description);
+        }
     }
 }

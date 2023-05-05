@@ -1,4 +1,4 @@
-# Paimon (Incubating)
+![Paimon](https://paimon.apache.org/assets/paimon_blue.svg)
 
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![Get on Slack](https://img.shields.io/badge/slack-join-orange.svg)](https://the-asf.slack.com/archives/C053Q2NCW8G)
@@ -71,7 +71,7 @@ Don’t forget to introduce yourself in channel.
 
 JDK 8/11 is required for building the project.
 
-- Run the `mvn clean package -DskipTests` command to build the project.
+- Run the `mvn clean install -DskipTests` command to build the project.
 - Run the `mvn spotless:apply` to format the project (both Java and Scala).
 - IDE: Mark `paimon-common/target/generated-sources/antlr4` as Sources Root.
 

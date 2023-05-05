@@ -115,6 +115,7 @@ CREATE TABLE all_types_table (
     _datetime_p2 DATETIME(2),
     -- TIMESTAMP
     _timestamp TIMESTAMP(6) DEFAULT NULL,
+    _timestamp0 TIMESTAMP,
     -- string
     _char CHAR(10),
     _varchar VARCHAR(20),
@@ -135,6 +136,15 @@ CREATE TABLE all_types_table (
     _enum ENUM ('value1','value2','value3'),
     -- YEAR
     _year YEAR,
+    _time TIME,
+    _point POINT,
+    _geometry GEOMETRY,
+    _linestring LINESTRING,
+    _polygon  POLYGON,
+    _multipoint  MULTIPOINT,
+    _multiline  MULTILINESTRING,
+    _multipolygon  MULTIPOLYGON,
+    _geometrycollection GEOMETRYCOLLECTION,
     PRIMARY KEY (_id)
 );
 
@@ -172,7 +182,7 @@ INSERT INTO all_types_table VALUES (
     -- DATETIME precision test
     '2023-03-24 14:30', '2023-03-24 14:30:05.12',
     -- TIMESTAMP
-    '2023-03-23 15:00:10.123456',
+    '2023-03-23 15:00:10.123456', '2023-03-23 00:10',
     -- string
     'Paimon', 'Apache Paimon','Apache Paimon MySQL TINYTEXT Test Data', 'Apache Paimon MySQL Test Data','Apache Paimon MySQL MEDIUMTEXT Test Data','Apache Paimon MySQL Long Test Data',
     -- BINARY
@@ -182,7 +192,17 @@ INSERT INTO all_types_table VALUES (
     -- enum
     'value1',
      -- YEAR
-     2023
+     2023,
+     -- TIME,
+     '10:13:23',
+    ST_GeomFromText('POINT(1 1)'),
+    ST_GeomFromText('POLYGON((1 1, 2 1, 2 2,  1 2, 1 1))'),
+    ST_GeomFromText('LINESTRING(3 0, 3 3, 3 5)'),
+    ST_GeomFromText('POLYGON((1 1, 2 1, 2 2,  1 2, 1 1))'),
+    ST_GeomFromText('MULTIPOINT((1 1),(2 2))'),
+    ST_GeomFromText('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'),
+    ST_GeomFromText('MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)),((5 5,7 5,7 7,5 7, 5 5)))'),
+    ST_GeomFromText('GEOMETRYCOLLECTION(POINT(10 10), POINT(30 30), LINESTRING(15 15, 20 20))')
 ), (
     2, 2.2,
     NULL, NULL, NULL, NULL, NULL, NULL,
@@ -200,9 +220,18 @@ INSERT INTO all_types_table VALUES (
     NULL,
     NULL, NULL, NULL,
     NULL, NULL,
+    NULL, NULL,
+    NULL, NULL, NULL, NULL,NULL, NULL,
+    NULL, NULL, NULL, NULL,NULL, NULL,
     NULL,
-    NULL, NULL, NULL, NULL,NULL, NULL,
-    NULL, NULL, NULL, NULL,NULL, NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
     NULL,
     NULL,
     NULL
@@ -258,4 +287,148 @@ CREATE TABLE t2 (
 -- no primary key, should be ignored
 CREATE TABLE t3 (
     v1 INT
+);
+
+-- to make sure we use JDBC Driver correctly
+CREATE DATABASE paimon_sync_database1;
+USE paimon_sync_database1;
+
+CREATE TABLE t1 (
+    k INT,
+    v1 VARCHAR(10),
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE t2 (
+    k1 INT,
+    k2 VARCHAR(10),
+    v1 INT,
+    v2 BIGINT,
+    PRIMARY KEY (k1, k2)
+);
+
+-- no primary key, should be ignored
+CREATE TABLE t3 (
+    v1 INT
+);
+
+-- ################################################################################
+--  MySqlSyncDatabaseActionITCase#testIgnoreIncompatibleTables
+-- ################################################################################
+
+CREATE DATABASE paimon_sync_database_ignore_incompatible;
+USE paimon_sync_database_ignore_incompatible;
+
+CREATE TABLE incompatible (
+    k INT,
+    v1 VARCHAR(10),
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE compatible (
+    k1 INT,
+    k2 VARCHAR(10),
+    v1 INT,
+    v2 BIGINT,
+    PRIMARY KEY (k1, k2)
+);
+
+-- ################################################################################
+--  MySqlSyncDatabaseActionITCase#testTableAffix
+-- ################################################################################
+
+CREATE DATABASE paimon_sync_database_affix;
+USE paimon_sync_database_affix;
+
+CREATE TABLE t1 (
+    k1 INT,
+    v0 VARCHAR(10),
+    PRIMARY KEY (k1)
+);
+
+CREATE TABLE t2 (
+    k2 INT,
+    v0 VARCHAR(10),
+    PRIMARY KEY (k2)
+);
+
+-- ################################################################################
+--  MySqlSyncDatabaseActionITCase#testIncludingTables
+-- ################################################################################
+
+CREATE DATABASE paimon_sync_database_including;
+USE paimon_sync_database_including;
+
+CREATE TABLE paimon_1 (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE paimon_2 (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE flink (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE ignored (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+-- ################################################################################
+--  MySqlSyncDatabaseActionITCase#testExcludingTables
+-- ################################################################################
+
+CREATE DATABASE paimon_sync_database_excluding;
+USE paimon_sync_database_excluding;
+
+CREATE TABLE paimon_1 (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE paimon_2 (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE flink (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE sync (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+-- ################################################################################
+--  MySqlSyncDatabaseActionITCase#testIncludingAndExcludingTables
+-- ################################################################################
+
+CREATE DATABASE paimon_sync_database_in_excluding;
+USE paimon_sync_database_in_excluding;
+
+CREATE TABLE paimon_1 (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE paimon_2 (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE flink (
+    k INT,
+    PRIMARY KEY (k)
+);
+
+CREATE TABLE test (
+    k INT,
+    PRIMARY KEY (k)
 );

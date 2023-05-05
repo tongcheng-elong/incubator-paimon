@@ -80,6 +80,8 @@ USE paimon.default;
 
 By using Paimon Hive catalog, changes to the catalog will directly affect the corresponding Hive metastore. Tables created in such catalog can also be accessed directly from Hive.
 
+To use Hive catalog, Database name, Table name and Field names should be lower case.
+
 {{< tabs "hive-metastore-example" >}}
 
 {{< tab "Flink" >}}
@@ -130,3 +132,8 @@ USE paimon.default;
 {{< /tab >}}
 
 {{< /tabs >}}
+
+If you are using a object storage , and you don't want that the location of paimon table/database is accessed by the filesystem of hive,
+which may lead to the error such as "No FileSystem for scheme: s3a".
+You can set location in the properties of table/database by the config of `location-in-properties`. See
+[setting the location of table/database in properties ]({{< ref "maintenance/configurations#HiveCatalogOptions" >}})

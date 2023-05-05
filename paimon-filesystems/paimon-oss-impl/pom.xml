@@ -24,7 +24,7 @@
     <parent>
         <artifactId>paimon-filesystems</artifactId>
         <groupId>org.apache.paimon</groupId>
-        <version>0.4-SNAPSHOT</version>
+        <version>0.5-SNAPSHOT</version>
     </parent>
 
     <artifactId>paimon-oss-impl</artifactId>
@@ -117,10 +117,6 @@
                                 </includes>
                             </artifactSet>
                             <relocations>
-                                <relocation>
-                                    <pattern>org.apache.hadoop</pattern>
-                                    <shadedPattern>org.apache.paimon.shade.hadoop3.org.apache.hadoop</shadedPattern>
-                                </relocation>
                                 <!-- relocate the OSS dependencies -->
                                 <relocation>
                                     <pattern>com.aliyun</pattern>
