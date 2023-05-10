@@ -21,7 +21,6 @@ package org.apache.paimon.operation;
 import org.apache.paimon.Snapshot;
 import org.apache.paimon.data.BinaryRow;
 import org.apache.paimon.data.InternalRow;
-import org.apache.paimon.manifest.AbstractManifestEntry;
 import org.apache.paimon.manifest.ManifestCacheFilter;
 import org.apache.paimon.manifest.ManifestEntry;
 import org.apache.paimon.manifest.ManifestEntrySerializer;
@@ -223,8 +222,8 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
         };
     }
 
-    private <T extends AbstractManifestEntry> Pair<Long, List<T>> doPlan(
-            Function<ManifestFileMeta, List<T>> readManifest) {
+    private Pair<Long, List<ManifestEntry>> doPlan(
+            Function<ManifestFileMeta, List<ManifestEntry>> readManifest) {
         List<ManifestFileMeta> manifests = specifiedManifests;
         Long snapshotId = specifiedSnapshotId;
         if (manifests == null) {
@@ -242,7 +241,7 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
         final List<ManifestFileMeta> readManifests = manifests;
         LOG.info("ReadManifests count : {}", readManifests.size());
 
-        Iterable<T> entries =
+        Iterable<ManifestEntry> entries =
                 ParallellyExecuteUtils.parallelismBatchIterable(
                         files ->
                                 files.parallelStream()
@@ -253,8 +252,8 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
                         readManifests,
                         scanManifestParallelism);
 
-        List<T> files = new ArrayList<>();
-        for (T file : AbstractManifestEntry.mergeEntries(entries)) {
+        List<ManifestEntry> files = new ArrayList<>();
+        for (ManifestEntry file : ManifestEntry.mergeEntries(entries)) {
             if (checkNumOfBuckets && file.totalBuckets() != numOfBuckets) {
                 String partInfo =
                         partitionConverter.getArity() > 0
@@ -329,29 +328,19 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
     }
 
     /** Note: Keep this thread-safe. */
-    private boolean filterByBucket(AbstractManifestEntry entry) {
+    private boolean filterByBucket(ManifestEntry entry) {
         return (specifiedBucket == null || entry.bucket() == specifiedBucket);
     }
 
     /** Note: Keep this thread-safe. */
-    private boolean filterByBucketSelector(AbstractManifestEntry entry) {
+    private boolean filterByBucketSelector(ManifestEntry entry) {
         return (bucketSelector == null
                 || bucketSelector.select(entry.bucket(), entry.totalBuckets()));
     }
 
     /** Note: Keep this thread-safe. */
-    private boolean filterByLevel(AbstractManifestEntry entry) {
-        return (levelFilter == null || levelFilter.test(entry.level()));
-    }
-
-    /** Note: Keep this thread-safe. */
-    private boolean filterByStats(AbstractManifestEntry entry) {
-        // filterByStats is an action that is completed as much as possible and does not have an
-        // impact if it is not done.
-        if (entry instanceof ManifestEntry) {
-            return filterByStats((ManifestEntry) entry);
-        }
-        return true;
+    private boolean filterByLevel(ManifestEntry entry) {
+        return (levelFilter == null || levelFilter.test(entry.file().level()));
     }
 
     /** Note: Keep this thread-safe. */
