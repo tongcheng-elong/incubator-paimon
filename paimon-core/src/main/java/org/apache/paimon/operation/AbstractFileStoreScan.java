@@ -105,7 +105,7 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
         this.numOfBuckets = numOfBuckets;
         this.checkNumOfBuckets = checkNumOfBuckets;
         this.tableSchemas = new ConcurrentHashMap<>();
-        this.scanManifestParallelism = scanManifestParallelism;
+        this.scanManifestParallelism = checkNumOfBuckets ? null : scanManifestParallelism;
     }
 
     @Override
@@ -239,7 +239,7 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
         }
 
         final List<ManifestFileMeta> readManifests = manifests;
-        LOG.info("ReadManifests count : {}", readManifests.size());
+        LOG.info("ReadManifests count : {}, scanManifestParallelism: {}", readManifests.size(), scanManifestParallelism);
 
         Iterable<ManifestEntry> entries =
                 ParallellyExecuteUtils.parallelismBatchIterable(
