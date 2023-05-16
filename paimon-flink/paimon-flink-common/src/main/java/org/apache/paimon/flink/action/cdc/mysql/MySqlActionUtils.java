@@ -21,7 +21,9 @@ package org.apache.paimon.flink.action.cdc.mysql;
 import org.apache.paimon.flink.sink.cdc.UpdatedDataFieldsProcessFunction;
 import org.apache.paimon.schema.Schema;
 import org.apache.paimon.schema.TableSchema;
+import org.apache.paimon.types.DataField;
 import org.apache.paimon.types.DataType;
+import org.apache.paimon.utils.Preconditions;
 
 import com.ververica.cdc.connectors.mysql.source.MySqlSource;
 import com.ververica.cdc.connectors.mysql.source.MySqlSourceBuilder;
@@ -38,10 +40,14 @@ import org.apache.kafka.connect.json.JsonConverterConfig;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
@@ -57,25 +63,25 @@ class MySqlActionUtils {
                 mySqlConfig.get(MySqlSourceOptions.PASSWORD));
     }
 
-    static void assertSchemaCompatible(TableSchema tableSchema, MySqlSchema mySqlSchema) {
-        if (!schemaCompatible(tableSchema, mySqlSchema)) {
+    static void assertSchemaCompatible(TableSchema paimonSchema, Schema mySqlSchema) {
+        if (!schemaCompatible(paimonSchema, mySqlSchema)) {
             throw new IllegalArgumentException(
                     "Paimon schema and MySQL schema are not compatible.\n"
                             + "Paimon fields are: "
-                            + tableSchema.fields()
+                            + paimonSchema.fields()
                             + ".\nMySQL fields are: "
                             + mySqlSchema.fields());
         }
     }
 
-    static boolean schemaCompatible(TableSchema tableSchema, MySqlSchema mySqlSchema) {
-        for (Map.Entry<String, Tuple2<DataType, String>> entry : mySqlSchema.fields().entrySet()) {
-            int idx = tableSchema.fieldNames().indexOf(entry.getKey());
+    static boolean schemaCompatible(TableSchema paimonSchema, Schema mySqlSchema) {
+        for (DataField field : mySqlSchema.fields()) {
+            int idx = paimonSchema.fieldNames().indexOf(field.name());
             if (idx < 0) {
                 return false;
             }
-            DataType type = tableSchema.fields().get(idx).type();
-            if (UpdatedDataFieldsProcessFunction.canConvert(entry.getValue().f0, type)
+            DataType type = paimonSchema.fields().get(idx).type();
+            if (UpdatedDataFieldsProcessFunction.canConvert(field.type(), type)
                     != UpdatedDataFieldsProcessFunction.ConvertAction.CONVERT) {
                 return false;
             }
@@ -87,24 +93,57 @@ class MySqlActionUtils {
             MySqlSchema mySqlSchema,
             List<String> specifiedPartitionKeys,
             List<String> specifiedPrimaryKeys,
-            Map<String, String> paimonConfig) {
+            List<ComputedColumn> computedColumns,
+            Map<String, String> paimonConfig,
+            boolean caseSensitive) {
         Schema.Builder builder = Schema.newBuilder();
         builder.options(paimonConfig);
 
-        for (Map.Entry<String, Tuple2<DataType, String>> entry : mySqlSchema.fields().entrySet()) {
+        // build columns and primary keys from mySqlSchema
+        LinkedHashMap<String, Tuple2<DataType, String>> mySqlFields;
+        List<String> mySqlPrimaryKeys;
+        if (caseSensitive) {
+            mySqlFields = mySqlSchema.fields();
+            mySqlPrimaryKeys = mySqlSchema.primaryKeys();
+        } else {
+            mySqlFields = new LinkedHashMap<>();
+            for (Map.Entry<String, Tuple2<DataType, String>> entry :
+                    mySqlSchema.fields().entrySet()) {
+                String fieldName = entry.getKey();
+                checkArgument(
+                        !mySqlFields.containsKey(fieldName.toLowerCase()),
+                        String.format(
+                                "Duplicate key '%s' in table '%s.%s' appears when converting fields map keys to case-insensitive form.",
+                                fieldName, mySqlSchema.databaseName(), mySqlSchema.tableName()));
+                mySqlFields.put(fieldName.toLowerCase(), entry.getValue());
+            }
+            mySqlPrimaryKeys =
+                    mySqlSchema.primaryKeys().stream()
+                            .map(String::toLowerCase)
+                            .collect(Collectors.toList());
+        }
+
+        for (Map.Entry<String, Tuple2<DataType, String>> entry : mySqlFields.entrySet()) {
             builder.column(entry.getKey(), entry.getValue().f0, entry.getValue().f1);
+        }
+
+        for (ComputedColumn computedColumn : computedColumns) {
+            builder.column(computedColumn.columnName(), computedColumn.columnType());
         }
 
         if (specifiedPrimaryKeys.size() > 0) {
             for (String key : specifiedPrimaryKeys) {
-                if (!mySqlSchema.fields().containsKey(key)) {
+                if (!mySqlFields.containsKey(key)
+                        && computedColumns.stream().noneMatch(c -> c.columnName().equals(key))) {
                     throw new IllegalArgumentException(
-                            "Specified primary key " + key + " does not exist in MySQL tables");
+                            "Specified primary key "
+                                    + key
+                                    + " does not exist in MySQL tables or computed columns.");
                 }
             }
             builder.primaryKey(specifiedPrimaryKeys);
-        } else if (mySqlSchema.primaryKeys().size() > 0) {
-            builder.primaryKey(mySqlSchema.primaryKeys());
+        } else if (mySqlPrimaryKeys.size() > 0) {
+            builder.primaryKey(mySqlPrimaryKeys);
         } else {
             throw new IllegalArgumentException(
                     "Primary keys are not specified. "
@@ -233,5 +272,53 @@ class MySqlActionUtils {
                 mySqlConfig.get(MySqlSourceOptions.TABLE_NAME) != null,
                 String.format(
                         "mysql-conf [%s] must be specified.", MySqlSourceOptions.TABLE_NAME.key()));
+    }
+
+    static List<ComputedColumn> buildComputedColumns(
+            List<String> computedColumnArgs, Map<String, DataType> typeMapping) {
+        List<ComputedColumn> computedColumns = new ArrayList<>();
+        for (String columnArg : computedColumnArgs) {
+            String[] kv = columnArg.split("=");
+            if (kv.length != 2) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "Invalid computed column argument: %s. Please use format 'column-name=expr-name(args, ...)'.",
+                                columnArg));
+            }
+            String columnName = kv[0].trim();
+            String expression = kv[1].trim();
+            // parse expression
+            int left = expression.indexOf('(');
+            int right = expression.indexOf(')');
+            Preconditions.checkArgument(
+                    left > 0 && right > left,
+                    String.format(
+                            "Invalid expression: %s. Please use format 'expr-name(args, ...)'.",
+                            expression));
+
+            String exprName = expression.substring(0, left);
+            String[] args = expression.substring(left + 1, right).split(",");
+            checkArgument(args.length >= 1, "Computed column needs at least one argument.");
+
+            String fieldReference = args[0].trim();
+            String[] literals =
+                    Arrays.stream(args).skip(1).map(String::trim).toArray(String[]::new);
+            checkArgument(
+                    typeMapping.containsKey(fieldReference),
+                    String.format(
+                            "Referenced field '%s' is not in given MySQL fields: %s.",
+                            fieldReference, typeMapping.keySet()));
+
+            computedColumns.add(
+                    new ComputedColumn(
+                            columnName,
+                            Expression.create(
+                                    exprName,
+                                    fieldReference,
+                                    typeMapping.get(fieldReference),
+                                    literals)));
+        }
+
+        return computedColumns;
     }
 }

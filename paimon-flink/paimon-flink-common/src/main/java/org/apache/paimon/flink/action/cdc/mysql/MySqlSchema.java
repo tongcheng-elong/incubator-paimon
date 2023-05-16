@@ -26,11 +26,10 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /** Utility class to load MySQL table schema with JDBC. */
 public class MySqlSchema {
@@ -41,8 +40,7 @@ public class MySqlSchema {
     private final LinkedHashMap<String, Tuple2<DataType, String>> fields;
     private final List<String> primaryKeys;
 
-    public MySqlSchema(
-            DatabaseMetaData metaData, String databaseName, String tableName, boolean caseSensitive)
+    public MySqlSchema(DatabaseMetaData metaData, String databaseName, String tableName)
             throws Exception {
         this.databaseName = databaseName;
         this.tableName = tableName;
@@ -62,14 +60,6 @@ public class MySqlSchema {
                 if (rs.wasNull()) {
                     scale = null;
                 }
-                if (!caseSensitive) {
-                    checkArgument(
-                            !fields.containsKey(fieldName.toLowerCase()),
-                            String.format(
-                                    "Duplicate key '%s' in table '%s.%s' appears when converting fields map keys to case-insensitive form.",
-                                    fieldName, databaseName, tableName));
-                    fieldName = fieldName.toLowerCase();
-                }
                 fields.put(
                         fieldName,
                         Tuple2.of(
@@ -82,9 +72,6 @@ public class MySqlSchema {
         try (ResultSet rs = metaData.getPrimaryKeys(databaseName, null, tableName)) {
             while (rs.next()) {
                 String fieldName = rs.getString("COLUMN_NAME");
-                if (!caseSensitive) {
-                    fieldName = fieldName.toLowerCase();
-                }
                 primaryKeys.add(fieldName);
             }
         }
@@ -98,8 +85,14 @@ public class MySqlSchema {
         return tableName;
     }
 
-    public Map<String, Tuple2<DataType, String>> fields() {
+    public LinkedHashMap<String, Tuple2<DataType, String>> fields() {
         return fields;
+    }
+
+    public Map<String, DataType> typeMapping() {
+        Map<String, DataType> typeMapping = new HashMap<>();
+        fields.forEach((name, tuple) -> typeMapping.put(name, tuple.f0));
+        return typeMapping;
     }
 
     public List<String> primaryKeys() {

@@ -45,14 +45,17 @@ import org.apache.flink.table.catalog.CatalogTableImpl;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.TableChange;
 import org.apache.flink.table.catalog.TableChange.AddColumn;
+import org.apache.flink.table.catalog.TableChange.AddWatermark;
 import org.apache.flink.table.catalog.TableChange.After;
 import org.apache.flink.table.catalog.TableChange.ColumnPosition;
 import org.apache.flink.table.catalog.TableChange.DropColumn;
+import org.apache.flink.table.catalog.TableChange.DropWatermark;
 import org.apache.flink.table.catalog.TableChange.First;
 import org.apache.flink.table.catalog.TableChange.ModifyColumnComment;
 import org.apache.flink.table.catalog.TableChange.ModifyColumnName;
 import org.apache.flink.table.catalog.TableChange.ModifyColumnPosition;
 import org.apache.flink.table.catalog.TableChange.ModifyPhysicalColumnType;
+import org.apache.flink.table.catalog.TableChange.ModifyWatermark;
 import org.apache.flink.table.catalog.TableChange.ResetOption;
 import org.apache.flink.table.catalog.TableChange.SetOption;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
@@ -68,6 +71,7 @@ import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.descriptors.DescriptorProperties;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.factories.Factory;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.util.ArrayList;
@@ -81,6 +85,9 @@ import java.util.stream.Collectors;
 
 import static org.apache.flink.table.descriptors.DescriptorProperties.NAME;
 import static org.apache.flink.table.descriptors.DescriptorProperties.WATERMARK;
+import static org.apache.flink.table.descriptors.DescriptorProperties.WATERMARK_ROWTIME;
+import static org.apache.flink.table.descriptors.DescriptorProperties.WATERMARK_STRATEGY_DATA_TYPE;
+import static org.apache.flink.table.descriptors.DescriptorProperties.WATERMARK_STRATEGY_EXPR;
 import static org.apache.flink.table.descriptors.Schema.SCHEMA;
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.flink.table.types.utils.TypeConversions.fromLogicalToDataType;
@@ -250,37 +257,77 @@ public class FlinkCatalog extends AbstractCatalog {
         }
     }
 
-    private SchemaChange toSchemaChange(TableChange change) {
+    private List<SchemaChange> toSchemaChange(TableChange change) {
+        List<SchemaChange> schemaChanges = new ArrayList<>();
         if (change instanceof AddColumn) {
             AddColumn add = (AddColumn) change;
             String comment = add.getColumn().getComment().orElse(null);
             SchemaChange.Move move = getMove(add.getPosition(), add.getColumn().getName());
-            return SchemaChange.addColumn(
-                    add.getColumn().getName(),
-                    LogicalTypeConversion.toDataType(
-                            add.getColumn().getDataType().getLogicalType()),
-                    comment,
-                    move);
+            schemaChanges.add(
+                    SchemaChange.addColumn(
+                            add.getColumn().getName(),
+                            LogicalTypeConversion.toDataType(
+                                    add.getColumn().getDataType().getLogicalType()),
+                            comment,
+                            move));
+            return schemaChanges;
+        } else if (change instanceof AddWatermark) {
+            AddWatermark add = (AddWatermark) change;
+            setWatermarkOptions(add.getWatermark(), schemaChanges);
+            return schemaChanges;
         } else if (change instanceof DropColumn) {
             DropColumn drop = (DropColumn) change;
-            return SchemaChange.dropColumn(drop.getColumnName());
+            schemaChanges.add(SchemaChange.dropColumn(drop.getColumnName()));
+            return schemaChanges;
+        } else if (change instanceof DropWatermark) {
+            String watermarkPrefix = compoundKey(SCHEMA, WATERMARK, 0);
+            schemaChanges.add(
+                    SchemaChange.removeOption(compoundKey(watermarkPrefix, WATERMARK_ROWTIME)));
+            schemaChanges.add(
+                    SchemaChange.removeOption(
+                            compoundKey(watermarkPrefix, WATERMARK_STRATEGY_EXPR)));
+            schemaChanges.add(
+                    SchemaChange.removeOption(
+                            compoundKey(watermarkPrefix, WATERMARK_STRATEGY_DATA_TYPE)));
+            return schemaChanges;
         } else if (change instanceof ModifyColumnName) {
             ModifyColumnName modify = (ModifyColumnName) change;
-            return SchemaChange.renameColumn(modify.getOldColumnName(), modify.getNewColumnName());
+            schemaChanges.add(
+                    SchemaChange.renameColumn(
+                            modify.getOldColumnName(), modify.getNewColumnName()));
+            return schemaChanges;
         } else if (change instanceof ModifyPhysicalColumnType) {
             ModifyPhysicalColumnType modify = (ModifyPhysicalColumnType) change;
-            return SchemaChange.updateColumnType(
-                    modify.getOldColumn().getName(),
-                    LogicalTypeConversion.toDataType(modify.getNewType().getLogicalType()));
+            LogicalType newColumnType = modify.getNewType().getLogicalType();
+            LogicalType oldColumnType = modify.getOldColumn().getDataType().getLogicalType();
+            if (newColumnType.isNullable() != oldColumnType.isNullable()) {
+                schemaChanges.add(
+                        SchemaChange.updateColumnNullability(
+                                new String[] {modify.getNewColumn().getName()},
+                                newColumnType.isNullable()));
+            }
+            schemaChanges.add(
+                    SchemaChange.updateColumnType(
+                            modify.getOldColumn().getName(),
+                            LogicalTypeConversion.toDataType(newColumnType)));
+            return schemaChanges;
         } else if (change instanceof ModifyColumnPosition) {
             ModifyColumnPosition modify = (ModifyColumnPosition) change;
             SchemaChange.Move move =
                     getMove(modify.getNewPosition(), modify.getNewColumn().getName());
-            return SchemaChange.updateColumnPosition(move);
+            schemaChanges.add(SchemaChange.updateColumnPosition(move));
+            return schemaChanges;
         } else if (change instanceof TableChange.ModifyColumnComment) {
             ModifyColumnComment modify = (ModifyColumnComment) change;
-            return SchemaChange.updateColumnComment(
-                    new String[] {modify.getNewColumn().getName()}, modify.getNewComment());
+            schemaChanges.add(
+                    SchemaChange.updateColumnComment(
+                            new String[] {modify.getNewColumn().getName()},
+                            modify.getNewComment()));
+            return schemaChanges;
+        } else if (change instanceof ModifyWatermark) {
+            ModifyWatermark modify = (ModifyWatermark) change;
+            setWatermarkOptions(modify.getNewWatermark(), schemaChanges);
+            return schemaChanges;
         } else if (change instanceof SetOption) {
             SetOption setOption = (SetOption) change;
             String key = setOption.getKey();
@@ -288,10 +335,12 @@ public class FlinkCatalog extends AbstractCatalog {
 
             SchemaManager.checkAlterTablePath(key);
 
-            return SchemaChange.setOption(key, value);
+            schemaChanges.add(SchemaChange.setOption(key, value));
+            return schemaChanges;
         } else if (change instanceof ResetOption) {
             ResetOption resetOption = (ResetOption) change;
-            return SchemaChange.removeOption(resetOption.getKey());
+            schemaChanges.add(SchemaChange.removeOption(resetOption.getKey()));
+            return schemaChanges;
         } else {
             throw new UnsupportedOperationException(
                     "Change is not supported: " + change.getClass());
@@ -362,7 +411,9 @@ public class FlinkCatalog extends AbstractCatalog {
         List<SchemaChange> changes = new ArrayList<>();
         if (null != tableChanges) {
             List<SchemaChange> schemaChanges =
-                    tableChanges.stream().map(this::toSchemaChange).collect(Collectors.toList());
+                    tableChanges.stream()
+                            .flatMap(tableChange -> toSchemaChange(tableChange).stream())
+                            .collect(Collectors.toList());
             changes.addAll(schemaChanges);
         }
 
@@ -383,6 +434,41 @@ public class FlinkCatalog extends AbstractCatalog {
         return move;
     }
 
+    private String getWatermarkKeyPrefix() {
+        return compoundKey(SCHEMA, WATERMARK, 0);
+    }
+
+    private String getWatermarkRowTimeKey(String watermarkPrefix) {
+        return compoundKey(watermarkPrefix, WATERMARK_ROWTIME);
+    }
+
+    private String getWatermarkExprKey(String watermarkPrefix) {
+        return compoundKey(watermarkPrefix, WATERMARK_STRATEGY_EXPR);
+    }
+
+    private String getWatermarkExprDataTypeKey(String watermarkPrefix) {
+        return compoundKey(watermarkPrefix, WATERMARK_STRATEGY_DATA_TYPE);
+    }
+
+    private void setWatermarkOptions(
+            org.apache.flink.table.catalog.WatermarkSpec wms, List<SchemaChange> schemaChanges) {
+        String watermarkPrefix = getWatermarkKeyPrefix();
+        schemaChanges.add(
+                SchemaChange.setOption(
+                        getWatermarkRowTimeKey(watermarkPrefix), wms.getRowtimeAttribute()));
+        schemaChanges.add(
+                SchemaChange.setOption(
+                        getWatermarkExprKey(watermarkPrefix),
+                        wms.getWatermarkExpression().asSerializableString()));
+        schemaChanges.add(
+                SchemaChange.setOption(
+                        getWatermarkExprDataTypeKey(watermarkPrefix),
+                        wms.getWatermarkExpression()
+                                .getOutputDataType()
+                                .getLogicalType()
+                                .asSerializableString()));
+    }
+
     private static void validateAlterTable(CatalogTable ct1, CatalogTable ct2) {
         org.apache.flink.table.api.TableSchema ts1 = ct1.getSchema();
         org.apache.flink.table.api.TableSchema ts2 = ct2.getSchema();
@@ -400,9 +486,8 @@ public class FlinkCatalog extends AbstractCatalog {
             pkEquality = true;
         }
 
-        if (!(Objects.equals(ts1.getWatermarkSpecs(), ts2.getWatermarkSpecs()) && pkEquality)) {
-            throw new UnsupportedOperationException(
-                    "Altering Watermark or primary key is not supported yet.");
+        if (!pkEquality) {
+            throw new UnsupportedOperationException("Altering primary key is not supported yet.");
         }
 
         if (!ct1.getPartitionKeys().equals(ct2.getPartitionKeys())) {

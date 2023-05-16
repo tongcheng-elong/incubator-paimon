@@ -20,6 +20,8 @@ package org.apache.paimon.flink;
 
 import org.apache.paimon.testutils.assertj.AssertionUtils;
 
+import org.apache.flink.table.api.TableException;
+import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.types.Row;
 import org.junit.jupiter.api.Test;
 
@@ -283,7 +285,16 @@ public class SchemaChangeITCase extends CatalogITCaseBase {
                                 + "  `c` VARCHAR(2147483647),\n"
                                 + "  `d` INT,\n"
                                 + "  `e` FLOAT NOT NULL,");
+        assertThatThrownBy(
+                        () ->
+                                sql(
+                                        "INSERT INTO T VALUES('aaa', 'bbb', 'ccc', 1, CAST(NULL AS FLOAT))"))
+                .satisfies(
+                        AssertionUtils.anyCauseMatches(
+                                TableException.class,
+                                "Column 'e' is NOT NULL, however, a null value is being written into it."));
 
+        // Not null -> nullable
         sql("ALTER TABLE T MODIFY e FLOAT");
         result = sql("SHOW CREATE TABLE T");
         assertThat(result.toString())
@@ -295,10 +306,40 @@ public class SchemaChangeITCase extends CatalogITCaseBase {
                                 + "  `d` INT,\n"
                                 + "  `e` FLOAT");
 
-        assertThatThrownBy(() -> sql("ALTER TABLE T MODIFY c STRING NOT NULL"))
-                .hasMessageContaining(
-                        "Could not execute ALTER TABLE PAIMON.default.T\n"
-                                + "  MODIFY `c` STRING NOT NULL");
+        // Nullable -> not null
+        sql("ALTER TABLE T MODIFY c STRING NOT NULL");
+        result = sql("SHOW CREATE TABLE T");
+        assertThat(result.toString())
+                .contains(
+                        "CREATE TABLE `PAIMON`.`default`.`T` (\n"
+                                + "  `a` VARCHAR(2147483647) NOT NULL,\n"
+                                + "  `b` VARCHAR(2147483647),\n"
+                                + "  `c` VARCHAR(2147483647) NOT NULL,\n"
+                                + "  `d` INT,\n"
+                                + "  `e` FLOAT");
+        assertThatThrownBy(
+                        () ->
+                                sql(
+                                        "INSERT INTO T VALUES('aaa', 'bbb', CAST(NULL AS STRING), 1, CAST(NULL AS FLOAT))"))
+                .satisfies(
+                        AssertionUtils.anyCauseMatches(
+                                TableException.class,
+                                "Column 'c' is NOT NULL, however, a null value is being written into it."));
+
+        // Insert a null value
+        sql("INSERT INTO T VALUES('aaa', 'bbb', 'ccc', 1, CAST(NULL AS FLOAT))");
+        result = sql("select * from T");
+        assertThat(result.toString()).isEqualTo("[+I[aaa, bbb, ccc, 1, null]]");
+
+        // Then nullable -> not null
+        tEnv.getConfig()
+                .set(
+                        ExecutionConfigOptions.TABLE_EXEC_SINK_NOT_NULL_ENFORCER,
+                        ExecutionConfigOptions.NotNullEnforcer.DROP);
+        sql("ALTER TABLE T MODIFY e FLOAT NOT NULL;\n");
+        sql("INSERT INTO T VALUES('aa2', 'bb2', 'cc2', 2, 2.5)");
+        result = sql("select * from T");
+        assertThat(result.toString()).isEqualTo("[+I[aa2, bb2, cc2, 2, 2.5]]");
     }
 
     @Test
@@ -326,6 +367,78 @@ public class SchemaChangeITCase extends CatalogITCaseBase {
                 .containsExactlyInAnyOrder(
                         "+I[a, STRING, true, null, null, null, from column a]",
                         "+I[b, STRING, true, null, null, null, from column b updated]");
+    }
+
+    @Test
+    public void testAddWatermark() {
+        sql("CREATE TABLE T (a STRING, ts TIMESTAMP(3))");
+        List<String> result =
+                sql("DESC T").stream().map(Objects::toString).collect(Collectors.toList());
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "+I[a, STRING, true, null, null, null]",
+                        "+I[ts, TIMESTAMP(3), true, null, null, null]");
+
+        // add watermark
+        sql("ALTER TABLE T ADD WATERMARK FOR ts AS ts - INTERVAL '1' HOUR");
+        result = sql("DESC T").stream().map(Objects::toString).collect(Collectors.toList());
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "+I[a, STRING, true, null, null, null]",
+                        "+I[ts, TIMESTAMP(3), true, null, null, `ts` - INTERVAL '1' HOUR]");
+
+        // add one more watermark
+        assertThatThrownBy(
+                        () -> sql("ALTER TABLE T ADD WATERMARK FOR ts AS ts - INTERVAL '2' HOUR"))
+                .hasMessageContaining("The base table has already defined the watermark strategy");
+    }
+
+    @Test
+    public void testDropWatermark() {
+        sql(
+                "CREATE TABLE T (a STRING, ts TIMESTAMP(3), WATERMARK FOR ts AS ts - INTERVAL '1' HOUR)");
+        List<String> result =
+                sql("DESC T").stream().map(Objects::toString).collect(Collectors.toList());
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "+I[a, STRING, true, null, null, null]",
+                        "+I[ts, TIMESTAMP(3), true, null, null, `ts` - INTERVAL '1' HOUR]");
+
+        // drop watermark
+        sql("ALTER TABLE T DROP WATERMARK");
+        result = sql("DESC T").stream().map(Objects::toString).collect(Collectors.toList());
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "+I[a, STRING, true, null, null, null]",
+                        "+I[ts, TIMESTAMP(3), true, null, null, null]");
+
+        // drop again
+        assertThatThrownBy(() -> sql("ALTER TABLE T DROP WATERMARK"))
+                .hasMessageContaining("The base table does not define any watermark strategy");
+    }
+
+    @Test
+    public void testModifyWatermark() {
+        sql("CREATE TABLE T (a STRING, ts TIMESTAMP(3))");
+
+        // modify watermark
+        assertThatThrownBy(
+                        () ->
+                                sql(
+                                        "ALTER TABLE T MODIFY WATERMARK FOR ts AS ts - INTERVAL '1' HOUR"))
+                .hasMessageContaining("The base table does not define any watermark");
+
+        // add watermark
+        sql("ALTER TABLE T ADD WATERMARK FOR ts AS ts - INTERVAL '1' HOUR");
+
+        // modify watermark
+        sql("ALTER TABLE T MODIFY WATERMARK FOR ts AS ts - INTERVAL '2' HOUR");
+        List<String> result =
+                sql("DESC T").stream().map(Objects::toString).collect(Collectors.toList());
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "+I[a, STRING, true, null, null, null]",
+                        "+I[ts, TIMESTAMP(3), true, null, null, `ts` - INTERVAL '2' HOUR]");
     }
 
     @Test
@@ -386,5 +499,66 @@ public class SchemaChangeITCase extends CatalogITCaseBase {
                 .getRootCause()
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessage("Change 'sequence.field' is not supported yet.");
+    }
+
+    @Test
+    public void testAlterTableSchema() {
+        sql("CREATE TABLE T (a STRING, b STRING COMMENT 'from column b')");
+        List<String> result =
+                sql("DESC T").stream().map(Objects::toString).collect(Collectors.toList());
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "+I[a, STRING, true, null, null, null, null]",
+                        "+I[b, STRING, true, null, null, null, from column b]");
+
+        // add columns at different positions
+        sql("ALTER TABLE T ADD (c INT AFTER b)");
+        result = sql("DESC T").stream().map(Objects::toString).collect(Collectors.toList());
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "+I[a, STRING, true, null, null, null, null]",
+                        "+I[b, STRING, true, null, null, null, from column b]",
+                        "+I[c, INT, true, null, null, null, null]");
+
+        sql("ALTER TABLE T ADD (d INT FIRST)");
+        result = sql("DESC T").stream().map(Objects::toString).collect(Collectors.toList());
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "+I[d, INT, true, null, null, null, null]",
+                        "+I[a, STRING, true, null, null, null, null]",
+                        "+I[b, STRING, true, null, null, null, from column b]",
+                        "+I[c, INT, true, null, null, null, null]");
+
+        // drop previously added column
+        sql("ALTER TABLE T DROP d");
+        result = sql("DESC T").stream().map(Objects::toString).collect(Collectors.toList());
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "+I[a, STRING, true, null, null, null, null]",
+                        "+I[b, STRING, true, null, null, null, from column b]",
+                        "+I[c, INT, true, null, null, null, null]");
+
+        // change column type
+        sql("ALTER TABLE T MODIFY (c BIGINT)");
+        result = sql("DESC T").stream().map(Objects::toString).collect(Collectors.toList());
+        assertThat(result)
+                .containsExactlyInAnyOrder(
+                        "+I[a, STRING, true, null, null, null, null]",
+                        "+I[b, STRING, true, null, null, null, from column b]",
+                        "+I[c, BIGINT, true, null, null, null, null]");
+
+        // invalid type change: BIGINT to INT
+        assertThatThrownBy(() -> sql("ALTER TABLE T MODIFY (c INT)"))
+                .getRootCause()
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage(
+                        "Column type c[BIGINT] cannot be converted to INT without loosing information.");
+
+        // invalid type change: BIGINT to STRING
+        assertThatThrownBy(() -> sql("ALTER TABLE T MODIFY (c STRING)"))
+                .getRootCause()
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage(
+                        "Column type c[BIGINT] cannot be converted to STRING without loosing information.");
     }
 }
