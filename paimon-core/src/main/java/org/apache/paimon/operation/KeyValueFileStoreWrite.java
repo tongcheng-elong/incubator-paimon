@@ -129,8 +129,8 @@ public class KeyValueFileStoreWrite extends MemoryFileStoreWrite<KeyValue> {
             List<DataFileMeta> restoreFiles,
             @Nullable CommitIncrement restoreIncrement,
             ExecutorService compactExecutor) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(
+        if (LOG.isInfoEnabled()) {
+            LOG.info(
                     "Creating merge tree writer for partition {} bucket {} from restored files {}",
                     partition,
                     bucket,

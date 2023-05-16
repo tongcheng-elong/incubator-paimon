@@ -36,9 +36,7 @@ public abstract class CompactTask implements Callable<CompactResult> {
         long startMillis = System.currentTimeMillis();
         CompactResult result = doCompact();
 
-        if (LOG.isDebugEnabled()) {
-            logMetric(startMillis, result.before(), result.after());
-        }
+        LOG.info(logMetric(startMillis, result.before(), result.after()));
 
         return result;
     }

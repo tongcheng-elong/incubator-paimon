@@ -180,8 +180,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
 
     @Override
     public void commit(ManifestCommittable committable, Map<String, String> properties) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Ready to commit\n" + committable.toString());
+        if (LOG.isInfoEnabled()) {
+            LOG.info("Ready to commit\n" + committable.toString());
         }
 
         Long safeLatestSnapshotId = null;
