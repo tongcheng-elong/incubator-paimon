@@ -143,6 +143,10 @@ public class FileStoreCommitImpl implements FileStoreCommit {
         this.ignoreEmptyCommit = true;
     }
 
+    public SnapshotManager getSnapshotManager() {
+        return snapshotManager;
+    }
+
     @Override
     public FileStoreCommit withLock(Lock lock) {
         this.lock = lock;
