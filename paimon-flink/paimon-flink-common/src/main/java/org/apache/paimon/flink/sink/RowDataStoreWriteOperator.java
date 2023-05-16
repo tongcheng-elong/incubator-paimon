@@ -18,8 +18,12 @@
 
 package org.apache.paimon.flink.sink;
 
+import org.apache.flink.metrics.Gauge;
+import org.apache.paimon.data.BinaryRow;
 import org.apache.paimon.data.InternalRow;
+import org.apache.paimon.flink.FlinkRowWrapper;
 import org.apache.paimon.flink.log.LogWriteCallback;
+import org.apache.paimon.operation.AbstractFileStoreWrite;
 import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.table.sink.SinkRecord;
 
@@ -37,12 +41,16 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.streaming.util.functions.StreamingFunctionUtils;
+import org.apache.flink.table.data.RowData;
+import org.apache.paimon.table.sink.TableWriteImpl;
+import org.apache.paimon.utils.RecordWriter;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Map;
 
 /** A {@link PrepareCommitOperator} to write {@link InternalRow}. Record schema is fixed. */
 public class RowDataStoreWriteOperator extends TableWriteOperator<InternalRow> {
@@ -55,6 +63,13 @@ public class RowDataStoreWriteOperator extends TableWriteOperator<InternalRow> {
 
     /** We listen to this ourselves because we don't have an {@link InternalTimerService}. */
     private long currentWatermark = Long.MIN_VALUE;
+
+    /** MergeTree/Append-only writer amout */
+    private transient long writersCount;
+
+    /** do compact cost time*/
+    private transient long compactTime;
+
 
     public RowDataStoreWriteOperator(
             FileStoreTable table,
@@ -83,6 +98,18 @@ public class RowDataStoreWriteOperator extends TableWriteOperator<InternalRow> {
         if (logSinkFunction != null) {
             StreamingFunctionUtils.restoreFunctionState(context, logSinkFunction);
         }
+        getRuntimeContext().getMetricGroup().gauge("paimonWriters", new Gauge<Long>() {
+            @Override
+            public Long getValue() {
+                return writersCount;
+            }
+        });
+        getRuntimeContext().getMetricGroup().gauge("paimonCompactTime", new Gauge<Long>() {
+            @Override
+            public Long getValue() {
+                return compactTime;
+            }
+        });
     }
 
     @Override
@@ -139,6 +166,42 @@ public class RowDataStoreWriteOperator extends TableWriteOperator<InternalRow> {
             StreamingFunctionUtils.snapshotFunctionState(
                     context, getOperatorStateBackend(), logSinkFunction);
         }
+        writersCount=getWriterCount();
+        compactTime=getCompactTime();
+    }
+    public long getWriterCount(){
+        try {
+            Map<BinaryRow, Map<Integer, AbstractFileStoreWrite.WriterContainer<?>>> writersMap =
+                    getWriters();
+            if(writersMap == null) return 0;
+            return  writersMap.keySet().stream().mapToInt(v -> writersMap.get(v).keySet().size()).sum();
+        }catch (Exception e){
+            LOG.warn("get writers count error:{}",e.getMessage());
+            return 0;
+        }
+    }
+
+    public long getCompactTime(){
+        try{
+            Map<BinaryRow, Map<Integer, AbstractFileStoreWrite.WriterContainer<?>>> writersMap =
+                    getWriters();
+            if(writersMap == null) return 0;
+            for(BinaryRow partition:writersMap.keySet()){
+                Map<Integer, AbstractFileStoreWrite.WriterContainer<?>> bucketWriteMap=writersMap.get(partition);
+                for(Integer bucket:bucketWriteMap.keySet()){
+                    RecordWriter recordWriter=bucketWriteMap.get(bucket).writer;
+                    return  recordWriter.getCompactTime();
+                }
+            }
+        }catch (Exception e){
+            LOG.warn("get compact cost time error:{}",e.getMessage());
+        }
+        return 0;
+    }
+    public Map<BinaryRow, Map<Integer, AbstractFileStoreWrite.WriterContainer<?>>> getWriters(){
+        TableWriteImpl<?> writeImpl= ((StoreSinkWriteImpl) write).write;
+        AbstractFileStoreWrite abstractFileStoreWrite = writeImpl.getWrite();
+        return abstractFileStoreWrite.getWriters();
     }
 
     @Override

@@ -47,10 +47,8 @@ public abstract class CompactTask implements Callable<CompactResult> {
         CompactResult result = null;
         try {
             result = doCompact();
-
-            if (LOG.isDebugEnabled()) {
-                logMetric(startMillis, result.before(), result.after());
-            }
+            result.setCompactTime(System.currentTimeMillis()-startMillis);
+            LOG.info(logMetric(startMillis, result.before(), result.after()));
             return result;
         } finally {
             if (metrics != null) {
