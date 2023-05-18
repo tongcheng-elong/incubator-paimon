@@ -105,7 +105,7 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
         this.numOfBuckets = numOfBuckets;
         this.checkNumOfBuckets = checkNumOfBuckets;
         this.tableSchemas = new ConcurrentHashMap<>();
-        this.scanManifestParallelism = checkNumOfBuckets ? null : scanManifestParallelism;
+        this.scanManifestParallelism = scanManifestParallelism;
     }
 
     @Override

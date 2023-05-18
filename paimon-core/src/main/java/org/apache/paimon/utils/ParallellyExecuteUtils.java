@@ -38,7 +38,7 @@ public class ParallellyExecuteUtils {
     public static <T, U> Iterable<T> parallelismBatchIterable(
             Function<List<U>, List<T>> processor, List<U> input, Integer queueSize) {
         if (queueSize == null) {
-            queueSize = FileUtils.COMMON_IO_FORK_JOIN_POOL.getParallelism() * 2;
+            queueSize = FileUtils.COMMON_IO_FORK_JOIN_POOL.getParallelism();
         } else if (queueSize <= 0) {
             throw new NegativeArraySizeException("queue size should not be negetive");
         }
