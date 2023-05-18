@@ -58,6 +58,10 @@ public class TableCommitImpl implements InnerTableCommit {
         this.partitionExpire = partitionExpire;
     }
 
+    public FileStoreCommit getCommit() {
+        return commit;
+    }
+
     @Override
     public TableCommitImpl withOverwrite(@Nullable Map<String, String> overwritePartitions) {
         this.overwritePartition = overwritePartitions;

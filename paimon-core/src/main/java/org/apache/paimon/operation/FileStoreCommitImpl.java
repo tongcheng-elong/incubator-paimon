@@ -143,6 +143,10 @@ public class FileStoreCommitImpl implements FileStoreCommit {
         this.ignoreEmptyCommit = true;
     }
 
+    public SnapshotManager getSnapshotManager() {
+        return snapshotManager;
+    }
+
     @Override
     public FileStoreCommit withLock(Lock lock) {
         this.lock = lock;
@@ -180,8 +184,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
 
     @Override
     public void commit(ManifestCommittable committable, Map<String, String> properties) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Ready to commit\n" + committable.toString());
+        if (LOG.isInfoEnabled()) {
+            LOG.info("Ready to commit\n" + committable.toString());
         }
 
         Long safeLatestSnapshotId = null;
@@ -666,8 +670,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
         }
 
         if (success) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(
+            if (LOG.isInfoEnabled()) {
+                LOG.info(
                         String.format(
                                 "Successfully commit snapshot #%d (path %s) by user %s "
                                         + "with identifier %s and kind %s.",

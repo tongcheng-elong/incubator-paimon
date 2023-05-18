@@ -146,7 +146,7 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
                 nextSnapshotId++;
                 return overwritePlan;
             } else if (followUpScanner.shouldScanSnapshot(snapshot)) {
-                LOG.debug("Find snapshot id {}.", nextSnapshotId);
+                LOG.info("Find snapshot id {}.", nextSnapshotId);
                 Plan plan = followUpScanner.scan(nextSnapshotId, snapshotSplitReader);
                 nextSnapshotId++;
                 return plan;

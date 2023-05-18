@@ -65,6 +65,9 @@ public class AppendOnlyWriter implements RecordWriter<InternalRow> {
 
     private RowDataRollingFileWriter writer;
 
+    /** The amount of time once compact takes*/
+    private long compactTime;
+
     public AppendOnlyWriter(
             FileIO fileIO,
             long schemaId,
@@ -164,6 +167,12 @@ public class AppendOnlyWriter implements RecordWriter<InternalRow> {
         }
     }
 
+    @Override
+    public long getCompactTime() {
+
+        return compactTime;
+    }
+
     private RowDataRollingFileWriter createRollingRowWriter() {
         return new RowDataRollingFileWriter(
                 fileIO,
@@ -184,6 +193,7 @@ public class AppendOnlyWriter implements RecordWriter<InternalRow> {
                         result -> {
                             compactBefore.addAll(result.before());
                             compactAfter.addAll(result.after());
+                            compactTime = result.compactTime();
                         });
     }
 

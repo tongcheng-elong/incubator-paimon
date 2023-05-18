@@ -349,6 +349,10 @@ public abstract class AbstractFileStoreWrite<T>
 
     protected void notifyNewWriter(RecordWriter<T> writer) {}
 
+    public Map<BinaryRow, Map<Integer, WriterContainer<T>>> getWriters() {
+        return writers;
+    }
+
     protected abstract RecordWriter<T> createWriter(
             BinaryRow partition,
             int bucket,

@@ -55,6 +55,10 @@ public class TableWriteImpl<T>
         this.recordExtractor = recordExtractor;
     }
 
+    public AbstractFileStoreWrite<T> getWrite() {
+        return write;
+    }
+
     @Override
     public TableWriteImpl<T> withOverwrite(boolean overwrite) {
         write.withOverwrite(overwrite);
