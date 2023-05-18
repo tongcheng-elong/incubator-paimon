@@ -711,6 +711,7 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                         .distinct()
                         .collect(Collectors.toList());
         try {
+            LOG.info("Reading manifest entries from changed partitions {}.", changedPartitions.size());
             List<ManifestEntry> entries = scan.withSnapshot(snapshotId)
                     .withPartitionFilter(changedPartitions)
                     .plan()
