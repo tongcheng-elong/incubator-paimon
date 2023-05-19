@@ -510,7 +510,6 @@ public class HiveCatalog extends AbstractCatalog {
     }
 
     private FieldSchema convertToFieldSchema(DataField dataField) {
-        LOG.info("dataField: name {}, type {}, comment {}", dataField.name(), dataField.type(), dataField.description().replace("_UTF8'", ""));
         return new FieldSchema(
                 dataField.name(),
                 HiveTypeUtils.logicalTypeToTypeInfo(dataField.type()).getTypeName(),
