@@ -18,6 +18,8 @@
 
 package org.apache.paimon.flink.sink;
 
+import org.apache.flink.configuration.BatchExecutionOptions;
+import org.apache.flink.configuration.CoreOptions;
 import org.apache.paimon.CoreOptions.ChangelogProducer;
 import org.apache.paimon.flink.utils.StreamExecutionEnvironmentUtils;
 import org.apache.paimon.options.Options;
@@ -136,8 +138,8 @@ public abstract class FlinkSink<T> implements Serializable {
                                 WRITER_NAME + " -> " + table.name(),
                                 typeInfo,
                                 createWriteOperator(sinkProvider, isStreaming, commitUser))
-                        .setParallelism(input.getParallelism());
-
+                        .setParallelism( (!isStreaming && conf.get(BatchExecutionOptions.ADAPTIVE_AUTO_PARALLELISM_ENABLED)) ?
+                                conf.get(CoreOptions.DEFAULT_PARALLELISM) : input.getParallelism());
         SingleOutputStreamOperator<?> committed =
                 written.transform(
                                 GLOBAL_COMMITTER_NAME + " -> " + table.name(),
