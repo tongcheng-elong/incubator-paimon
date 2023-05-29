@@ -17,8 +17,8 @@
 
 package org.apache.paimon.flink.sink;
 
+import org.apache.flink.metrics.Gauge;
 import org.apache.paimon.manifest.ManifestCommittable;
-import org.apache.paimon.utils.SerializableFunction;
 
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
@@ -28,6 +28,10 @@ import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.util.function.SerializableFunction;
+import org.apache.paimon.operation.FileStoreCommit;
+import org.apache.paimon.operation.FileStoreCommitImpl;
+import org.apache.paimon.utils.SnapshotManager;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -81,6 +85,8 @@ public class CommitterOperator extends AbstractStreamOperator<Committable>
 
     private transient boolean endInput;
 
+    private transient long lastSnapshot;
+
     public CommitterOperator(
             boolean streamingCheckpointEnabled,
             String initialCommitUser,
@@ -110,6 +116,15 @@ public class CommitterOperator extends AbstractStreamOperator<Committable>
         committer = committerFactory.apply(commitUser);
 
         committableStateManager.initializeState(context, committer);
+
+        this.lastSnapshot=getLastSnapshot();
+
+        getRuntimeContext().getMetricGroup().gauge("paimonLastSnapshot", new Gauge<Long>() {
+            @Override
+            public Long getValue() {
+                return lastSnapshot;
+            }
+        });
     }
 
     @Override
@@ -159,6 +174,18 @@ public class CommitterOperator extends AbstractStreamOperator<Committable>
                 committablesPerCheckpoint.headMap(checkpointId, true);
         committer.commit(committables(headMap));
         headMap.clear();
+        lastSnapshot=getLastSnapshot();
+    }
+
+    public Long getLastSnapshot(){
+        try {
+            FileStoreCommit fileStoreCommit= ((StoreCommitter)committer).getCommit().getCommit();
+            SnapshotManager snapshotManager=((FileStoreCommitImpl)fileStoreCommit).getSnapshotManager();
+            return snapshotManager.latestSnapshotId() == null ? 0L: snapshotManager.latestSnapshotId();
+        }catch (Exception e){
+            LOG.warn("get last snapshotId error:{}",e.getMessage());
+        }
+        return 0L;
     }
 
     @Override

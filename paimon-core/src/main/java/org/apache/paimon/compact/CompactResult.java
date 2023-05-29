@@ -31,6 +31,9 @@ public class CompactResult {
     private final List<DataFileMeta> after;
     private final List<DataFileMeta> changelog;
 
+    /** The amount of time once compact takes*/
+    private  long compactTime;
+
     public CompactResult() {
         this(Collections.emptyList(), Collections.emptyList());
     }
@@ -60,6 +63,14 @@ public class CompactResult {
 
     public List<DataFileMeta> changelog() {
         return changelog;
+    }
+
+    public long compactTime() {
+        return compactTime;
+    }
+
+    public void setCompactTime(long compactTime) {
+        this.compactTime = compactTime;
     }
 
     public void merge(CompactResult that) {

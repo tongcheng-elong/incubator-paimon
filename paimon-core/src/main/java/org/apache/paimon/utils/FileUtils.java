@@ -25,6 +25,9 @@ import org.apache.paimon.fs.FileStatus;
 import org.apache.paimon.fs.Path;
 import org.apache.paimon.reader.RecordReader;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,6 +42,8 @@ public class FileUtils {
 
     public static final ForkJoinPool COMMON_IO_FORK_JOIN_POOL;
 
+    private static final Logger LOG = LoggerFactory.getLogger(FileUtils.class);
+
     // if we want to name threads in the fork join pool we need all these
     // see https://stackoverflow.com/questions/34303094/
     static {
@@ -49,6 +54,7 @@ public class FileUtils {
                     worker.setName("file-store-common-io-" + worker.getPoolIndex());
                     return worker;
                 };
+        LOG.info("runtime availableProcessors:{}", Runtime.getRuntime().availableProcessors());
         COMMON_IO_FORK_JOIN_POOL =
                 new ForkJoinPool(Runtime.getRuntime().availableProcessors(), factory, null, false);
     }

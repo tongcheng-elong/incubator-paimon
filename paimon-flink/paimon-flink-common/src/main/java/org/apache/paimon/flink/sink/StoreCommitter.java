@@ -37,6 +37,10 @@ public class StoreCommitter implements Committer {
         this.commit = (TableCommitImpl) commit;
     }
 
+    public TableCommitImpl getCommit() {
+        return commit;
+    }
+
     @Override
     public List<ManifestCommittable> filterRecoveredCommittables(
             List<ManifestCommittable> globalCommittables) {

@@ -43,6 +43,7 @@ import org.apache.paimon.types.ReassignFieldId;
 import org.apache.paimon.types.RowType;
 import org.apache.paimon.utils.JsonSerdeUtil;
 import org.apache.paimon.utils.Preconditions;
+import org.apache.paimon.utils.StringUtils;
 
 import javax.annotation.Nullable;
 
@@ -122,7 +123,12 @@ public class SchemaManager implements Serializable {
                                                 + latest());
                             });
 
-            List<DataField> fields = schema.fields();
+            List<DataField> fields = schema.fields().stream().map(s -> new DataField(
+                    s.id(),
+                    s.name(),
+                    s.type(),
+                    StringUtils.isEmpty(s.description()) ? s.description() : s.description().replace("_UTF8'", "")))
+                    .collect(Collectors.toList());
             List<String> partitionKeys = schema.partitionKeys();
             List<String> primaryKeys = schema.primaryKeys();
             Map<String, String> options = schema.options();

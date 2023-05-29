@@ -23,9 +23,13 @@ import org.apache.paimon.schema.TableSchema;
 import org.apache.paimon.table.sink.KeyAndBucketExtractor;
 
 import org.apache.flink.table.data.RowData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** {@link ChannelComputer} for {@link RowData}. */
 public class RowDataChannelComputer implements ChannelComputer<RowData> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RowDataChannelComputer.class);
 
     private static final long serialVersionUID = 1L;
 
@@ -42,6 +46,7 @@ public class RowDataChannelComputer implements ChannelComputer<RowData> {
 
     @Override
     public void setup(int numChannels) {
+        LOG.info("setup channel numbers:{}",numChannels);
         this.numChannels = numChannels;
         this.extractor = new RowDataKeyAndBucketExtractor(schema);
     }

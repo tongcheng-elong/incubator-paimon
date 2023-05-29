@@ -132,6 +132,16 @@ public class HiveCatalog extends AbstractCatalog {
     }
 
     @Override
+    public Path getDataTableLocation(Identifier identifier) {
+        try {
+            Table table = client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
+            return new Path(table.getSd().getLocation());
+        } catch (TException e) {
+            throw new RuntimeException("Failed to get table location", e);
+        }
+    }
+
+    @Override
     public Optional<CatalogLock.Factory> lockFactory() {
         return lockEnabled()
                 ? Optional.of(HiveCatalogLock.createFactory(hiveConf, clientClassName))
@@ -300,7 +310,7 @@ public class HiveCatalog extends AbstractCatalog {
         try {
             client.createTable(table);
         } catch (TException e) {
-            Path path = getDataTableLocation(identifier);
+            Path path = super.getDataTableLocation(identifier);
             try {
                 fileIO.deleteDirectoryQuietly(path);
             } catch (Exception ee) {
@@ -355,7 +365,8 @@ public class HiveCatalog extends AbstractCatalog {
 
         checkFieldNamesUpperCaseInSchemaChange(changes);
         try {
-            final SchemaManager schemaManager = schemaManager(identifier);
+            final SchemaManager schemaManager = new SchemaManager(fileIO, getDataTableLocation(identifier))
+                    .withLock(lock(identifier));
             // first commit changes to underlying files
             TableSchema schema = schemaManager.commitChanges(changes);
 
@@ -471,7 +482,7 @@ public class HiveCatalog extends AbstractCatalog {
         table.setSd(sd);
 
         // update location
-        locationHelper.specifyTableLocation(table, getDataTableLocation(identifier).toString());
+        locationHelper.specifyTableLocation(table, super.getDataTableLocation(identifier).toString());
     }
 
     private StorageDescriptor convertToStorageDescriptor(TableSchema schema) {
@@ -545,7 +556,7 @@ public class HiveCatalog extends AbstractCatalog {
 
     private SchemaManager schemaManager(Identifier identifier) {
         checkIdentifierUpperCase(identifier);
-        return new SchemaManager(fileIO, getDataTableLocation(identifier))
+        return new SchemaManager(fileIO, super.getDataTableLocation(identifier))
                 .withLock(lock(identifier));
     }
 

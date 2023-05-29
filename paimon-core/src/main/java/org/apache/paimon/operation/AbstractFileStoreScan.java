@@ -41,6 +41,9 @@ import org.apache.paimon.utils.ParallellyExecuteUtils;
 import org.apache.paimon.utils.RowDataToObjectArrayConverter;
 import org.apache.paimon.utils.SnapshotManager;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
@@ -56,6 +59,7 @@ import static org.apache.paimon.utils.Preconditions.checkArgument;
 /** Default implementation of {@link FileStoreScan}. */
 public abstract class AbstractFileStoreScan implements FileStoreScan {
 
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractFileStoreScan.class);
     private final FieldStatsArraySerializer partitionStatsConverter;
     private final RowDataToObjectArrayConverter partitionConverter;
     protected final RowType bucketKeyType;
@@ -235,6 +239,7 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
         }
 
         final List<ManifestFileMeta> readManifests = manifests;
+        LOG.info("ReadManifests count : {}, scanManifestParallelism: {}", readManifests.size(), scanManifestParallelism);
 
         Iterable<ManifestEntry> entries =
                 ParallellyExecuteUtils.parallelismBatchIterable(

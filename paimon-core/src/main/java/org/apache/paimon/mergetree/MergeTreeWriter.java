@@ -74,6 +74,9 @@ public class MergeTreeWriter implements RecordWriter<KeyValue>, MemoryOwner {
     private long newSequenceNumber;
     private WriteBuffer writeBuffer;
 
+    /** The amount of time once compact takes*/
+    private long compactTime;
+
     public MergeTreeWriter(
             boolean writeBufferSpillable,
             int sortMaxFan,
@@ -119,6 +122,9 @@ public class MergeTreeWriter implements RecordWriter<KeyValue>, MemoryOwner {
     private long newSequenceNumber() {
         return newSequenceNumber++;
     }
+
+    @Override
+    public long getCompactTime() {return compactTime;}
 
     @VisibleForTesting
     CompactManager compactManager() {
@@ -275,6 +281,7 @@ public class MergeTreeWriter implements RecordWriter<KeyValue>, MemoryOwner {
         }
         compactAfter.addAll(result.after());
         compactChangelog.addAll(result.changelog());
+        compactTime=result.compactTime();
     }
 
     private void trySyncLatestCompaction(boolean blocking) throws Exception {

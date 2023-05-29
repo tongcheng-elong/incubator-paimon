@@ -143,6 +143,10 @@ public class FileStoreCommitImpl implements FileStoreCommit {
         this.ignoreEmptyCommit = true;
     }
 
+    public SnapshotManager getSnapshotManager() {
+        return snapshotManager;
+    }
+
     @Override
     public FileStoreCommit withLock(Lock lock) {
         this.lock = lock;
@@ -180,8 +184,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
 
     @Override
     public void commit(ManifestCommittable committable, Map<String, String> properties) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Ready to commit\n" + committable.toString());
+        if (LOG.isInfoEnabled()) {
+            LOG.info("Ready to commit\n" + committable.toString());
         }
 
         Long safeLatestSnapshotId = null;
@@ -477,6 +481,7 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                                 .withPartitionFilter(partitionFilter)
                                 .plan()
                                 .files();
+                LOG.info("Overwriting {} files", currentEntries.size());
                 for (ManifestEntry entry : currentEntries) {
                     changesWithOverwrite.add(
                             new ManifestEntry(
@@ -665,8 +670,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
         }
 
         if (success) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(
+            if (LOG.isInfoEnabled()) {
+                LOG.info(
                         String.format(
                                 "Successfully commit snapshot #%d (path %s) by user %s "
                                         + "with identifier %s and kind %s.",
@@ -706,10 +711,13 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                         .distinct()
                         .collect(Collectors.toList());
         try {
-            return scan.withSnapshot(snapshotId)
+            LOG.info("Reading manifest entries from changed partitions {}.", changedPartitions.size());
+            List<ManifestEntry> entries = scan.withSnapshot(snapshotId)
                     .withPartitionFilter(changedPartitions)
                     .plan()
                     .files();
+            LOG.info("Read {} manifest entries from changed partitions.", entries.size());
+            return entries;
         } catch (Throwable e) {
             throw new RuntimeException("Cannot read manifest entries from changed partitions.", e);
         }

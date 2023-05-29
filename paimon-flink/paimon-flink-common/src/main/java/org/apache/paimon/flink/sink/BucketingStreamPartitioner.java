@@ -23,6 +23,9 @@ import org.apache.flink.runtime.plugable.SerializationDelegate;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * A {@link StreamPartitioner} which sends records from the same bucket to the same downstream
  * channel.
@@ -30,6 +33,8 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
  * @param <T> type of record
  */
 public class BucketingStreamPartitioner<T> extends StreamPartitioner<T> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(BucketingStreamPartitioner.class);
 
     private final ChannelComputer<T> channelComputer;
 
@@ -39,6 +44,7 @@ public class BucketingStreamPartitioner<T> extends StreamPartitioner<T> {
 
     @Override
     public void setup(int numberOfChannels) {
+        LOG.info("setup channel numbers:{}",numberOfChannels);
         super.setup(numberOfChannels);
         channelComputer.setup(numberOfChannels);
     }
