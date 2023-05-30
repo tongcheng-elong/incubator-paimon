@@ -43,6 +43,8 @@ import org.apache.paimon.utils.SnapshotManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -239,6 +241,15 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
                 return Optional.empty();
             default:
                 return Optional.empty();
+        }
+    }
+
+    @Override
+    public void rollbackTo(long snapshotId) {
+        try {
+            snapshotManager().rollbackTo(store().newSnapshotDeletion(), snapshotId);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 }

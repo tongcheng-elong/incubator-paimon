@@ -22,6 +22,7 @@ import org.apache.flink.metrics.Gauge;
 import org.apache.paimon.data.BinaryRow;
 import org.apache.paimon.flink.FlinkRowWrapper;
 import org.apache.paimon.flink.log.LogWriteCallback;
+import org.apache.paimon.options.Options;
 import org.apache.paimon.operation.AbstractFileStoreWrite;
 import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.table.sink.SinkRecord;
@@ -50,8 +51,10 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.paimon.flink.FlinkConnectorOptions.SINK_USE_MANAGED_MEMORY;
+
 /** A {@link PrepareCommitOperator} to write {@link RowData}. Record schema is fixed. */
-public class RowDataStoreWriteOperator extends PrepareCommitOperator<RowData> {
+public class RowDataStoreWriteOperator extends PrepareCommitOperator<RowData, Committable> {
 
     private static final long serialVersionUID = 3L;
 
@@ -80,6 +83,7 @@ public class RowDataStoreWriteOperator extends PrepareCommitOperator<RowData> {
             @Nullable LogSinkFunction logSinkFunction,
             StoreSinkWrite.Provider storeSinkWriteProvider,
             String initialCommitUser) {
+        super(Options.fromMap(table.options()));
         this.table = table;
         this.logSinkFunction = logSinkFunction;
         this.storeSinkWriteProvider = storeSinkWriteProvider;
@@ -118,12 +122,18 @@ public class RowDataStoreWriteOperator extends PrepareCommitOperator<RowData> {
                                 channelComputer.channel(partition, bucket)
                                         == getRuntimeContext().getIndexOfThisSubtask());
 
+        Options options = Options.fromMap(table.options());
+        if (options.get(SINK_USE_MANAGED_MEMORY) && memoryPool == null) {
+            throw new RuntimeException("Memory pool must be initialized first.");
+        }
+
         write =
                 storeSinkWriteProvider.provide(
                         table,
                         commitUser,
                         state,
-                        getContainingTask().getEnvironment().getIOManager());
+                        getContainingTask().getEnvironment().getIOManager(),
+                        memoryPool);
 
         if (logSinkFunction != null) {
             StreamingFunctionUtils.restoreFunctionState(context, logSinkFunction);

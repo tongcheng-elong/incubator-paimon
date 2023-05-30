@@ -22,16 +22,13 @@ import java.util.Optional;
 
 import static org.apache.paimon.flink.action.Action.Factory.printHelp;
 
-/** Table maintenance actions for Flink. */
+/**
+ * Table maintenance actions for Flink.
+ *
+ * @deprecated Compatible with older versions of usage
+ */
+@Deprecated
 public class FlinkActions {
-
-    // ------------------------------------------------------------------------
-    //  Java API
-    // ------------------------------------------------------------------------
-
-    public static CompactAction compact(String warehouse, String database, String tableName) {
-        return new CompactAction(warehouse, database, tableName);
-    }
 
     // ------------------------------------------------------------------------
     //  Flink run methods
