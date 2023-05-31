@@ -18,6 +18,8 @@
 
 package org.apache.paimon.flink.source;
 
+import org.apache.paimon.data.BinaryRow;
+import org.apache.paimon.flink.sink.ChannelComputer;
 import org.apache.paimon.table.source.DataSplit;
 import org.apache.paimon.table.source.EndOfScanException;
 import org.apache.paimon.table.source.StreamTableScan;
@@ -95,8 +97,11 @@ public class ContinuousFileSplitEnumerator
     }
 
     private void addSplit(FileStoreSourceSplit split) {
+        BinaryRow partition = ((DataSplit) split.split()).partition();
+        int bucket = ((DataSplit) split.split()).bucket();
+        int task = ChannelComputer.select(partition,bucket,context.currentParallelism());
         bucketSplits
-                .computeIfAbsent(((DataSplit) split.split()).bucket(), i -> new LinkedList<>())
+                .computeIfAbsent(task, i -> new LinkedList<>())
                 .add(split);
     }
 
@@ -105,8 +110,11 @@ public class ContinuousFileSplitEnumerator
     }
 
     private void addSplitToHead(FileStoreSourceSplit split) {
+        BinaryRow partition = ((DataSplit) split.split()).partition();
+        int bucket = ((DataSplit) split.split()).bucket();
+        int task = ChannelComputer.select(partition,bucket,context.currentParallelism());
         bucketSplits
-                .computeIfAbsent(((DataSplit) split.split()).bucket(), i -> new LinkedList<>())
+                .computeIfAbsent(task, i -> new LinkedList<>())
                 .addFirst(split);
     }
 
@@ -197,11 +205,10 @@ public class ContinuousFileSplitEnumerator
     private Map<Integer, List<FileStoreSourceSplit>> createAssignment() {
         Map<Integer, List<FileStoreSourceSplit>> assignment = new HashMap<>();
         bucketSplits.forEach(
-                (bucket, splits) -> {
+                (task, splits) -> {
                     if (splits.size() > 0) {
                         // To ensure the order of consumption, the data of the same bucket is given
                         // to a task to be consumed.
-                        int task = bucket % context.currentParallelism();
                         if (readersAwaitingSplit.contains(task)) {
                             // if the reader that requested another split has failed in the
                             // meantime, remove
