@@ -47,6 +47,7 @@ import java.util.Set;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
+import static org.apache.paimon.utils.SerializationUtils.deserializeBinaryRow;
 
 /** A continuously monitoring enumerator. */
 public class ContinuousFileSplitEnumerator
