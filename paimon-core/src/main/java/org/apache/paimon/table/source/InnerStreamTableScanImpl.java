@@ -96,10 +96,12 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
         if (result instanceof StartingScanner.ScannedResult) {
             long currentSnapshotId = ((StartingScanner.ScannedResult) result).currentSnapshotId();
             nextSnapshotId = currentSnapshotId + 1;
+            LOG.info("start scan from snapshot:{}",currentSnapshotId);
             isFullPhaseEnd =
                     boundedChecker.shouldEndInput(snapshotManager.snapshot(currentSnapshotId));
         } else if (result instanceof StartingScanner.NextSnapshot) {
             nextSnapshotId = ((StartingScanner.NextSnapshot) result).nextSnapshotId();
+            LOG.info("start scan from next snapshot:{}",nextSnapshotId);
             isFullPhaseEnd =
                     snapshotManager.snapshotExists(nextSnapshotId - 1)
                             && boundedChecker.shouldEndInput(

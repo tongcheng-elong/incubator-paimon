@@ -23,10 +23,12 @@ import org.apache.paimon.predicate.Predicate;
 import org.apache.paimon.table.source.snapshot.SnapshotSplitReader;
 import org.apache.paimon.table.source.snapshot.StartingScanner;
 import org.apache.paimon.utils.SnapshotManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** {@link TableScan} implementation for batch planning. */
 public class InnerTableScanImpl extends AbstractInnerTableScan {
-
+    private static final Logger LOG = LoggerFactory.getLogger(InnerTableScanImpl.class);
     private final SnapshotManager snapshotManager;
 
     private StartingScanner startingScanner;
@@ -58,6 +60,10 @@ public class InnerTableScanImpl extends AbstractInnerTableScan {
             hasNext = false;
             StartingScanner.Result result =
                     startingScanner.scan(snapshotManager, snapshotSplitReader);
+            if(result instanceof StartingScanner.ScannedResult){
+                LOG.info("start scan from snapshot:{}",((StartingScanner.ScannedResult) result).currentSnapshotId());
+            }
+
             return DataFilePlan.fromResult(result);
         } else {
             throw new EndOfScanException();
