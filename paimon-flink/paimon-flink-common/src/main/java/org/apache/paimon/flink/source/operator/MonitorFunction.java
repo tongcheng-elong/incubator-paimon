@@ -18,6 +18,8 @@
 
 package org.apache.paimon.flink.source.operator;
 
+import org.apache.paimon.data.BinaryRow;
+import org.apache.paimon.flink.sink.ChannelComputer;
 import org.apache.paimon.flink.utils.JavaTypeInfo;
 import org.apache.paimon.table.source.DataSplit;
 import org.apache.paimon.table.source.EndOfScanException;
@@ -215,8 +217,15 @@ public class MonitorFunction extends RichSourceFunction<Split>
                         new JavaTypeInfo<>(Split.class))
                 .forceNonParallel()
                 .partitionCustom(
-                        (key, numPartitions) -> key % numPartitions,
-                        split -> ((DataSplit) split).bucket())
+                        (key, numPartitions) ->{
+                            BinaryRow partition = (BinaryRow) key.f0;
+                            int bucket= (int) key.f1;
+                            return ChannelComputer.select(partition,bucket,numPartitions);
+                        },
+                        split ->{
+                            BinaryRow partition = ((DataSplit) split).partition();
+                            int bucket = ((DataSplit) split).bucket();
+                            return new Tuple2(partition,bucket); } )
                 .transform(name + "-Reader", typeInfo, new ReadOperator(readBuilder));
     }
 }
