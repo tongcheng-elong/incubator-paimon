@@ -26,9 +26,25 @@ under the License.
 
 # CDC Ingestion
 
-Paimon supports synchronizing changes from different databases using change data capture (CDC). This feature requires Flink and its [CDC connectors](https://ververica.github.io/flink-cdc-connectors/).
+Paimon supports a variety of ways to ingest data into Paimon tables with schema evolution. This means that the added
+columns are synchronized to the Paimon table in real time and the synchronization job will not restarted for this purpose.
+
+We currently support the following sync ways:
+
+1. MySQL Synchronizing Table: synchronize one or multiple tables from MySQL into one Paimon table.
+2. MySQL Synchronizing Database: synchronize the whole MySQL database into one Paimon database.
+3. [API Synchronizing Table]({{< ref "/api/flink-api#cdc-ingestion-table" >}}): synchronize your custom DataStream input into one Paimon table.
+4. Kafka Synchronizing Table: synchronize one Kafka topic's table into one Paimon table.
 
 ## MySQL
+
+Paimon supports synchronizing changes from different databases using change data capture (CDC). This feature requires Flink and its [CDC connectors](https://ververica.github.io/flink-cdc-connectors/).
+
+### Prepare CDC Bundled Jar
+
+```
+flink-sql-connector-mysql-cdc-*.jar
+```
 
 ### Synchronizing Tables
 
@@ -38,8 +54,7 @@ To use this feature through `flink run`, run the following shell command.
 
 ```bash
 <FLINK_HOME>/bin/flink run \
-    -c org.apache.paimon.flink.action.FlinkActions \
-    /path/to/paimon-flink-**-{{< version >}}.jar \
+    /path/to/paimon-flink-action-{{< version >}}.jar \
     mysql-sync-table
     --warehouse <warehouse-path> \
     --database <database-name> \
@@ -52,44 +67,15 @@ To use this feature through `flink run`, run the following shell command.
     [--table-conf <paimon-table-sink-conf> [--table-conf <paimon-table-sink-conf> ...]]
 ```
 
-* `--warehouse` is the path to Paimon warehouse.
-* `--database` is the database name in Paimon catalog.
-* `--table` is the Paimon table name.
-* `--partition-keys` are the partition keys for Paimon table. If there are multiple partition keys, connect them with comma, for example `dt,hh,mm`.
-* `--primary-keys` are the primary keys for Paimon table. If there are multiple primary keys, connect them with comma, for example `buyer_id,seller_id`.
-* `--computed-column` are the definitions of computed columns. The argument field is from MySQL table field name. Supported expressions are:
-  * year(date-column): Extract year from a DATE, DATETIME or TIMESTAMP. Output is an INT value represent the year.
-  * substring(column,beginInclusive): Get column.substring(beginInclusive). Output is a STRING.
-  * substring(column,beginInclusive,endExclusive): Get column.substring(beginInclusive,endExclusive). Output is a STRING.
-  * truncate(column,width): truncate column by width. Output type is same with column.
-    * If the column is a STRING, truncate(column,width) will truncate the string to width characters, namely `value.substring(0, width)`.
-    * If the column is an INT or LONG, truncate(column,width) will truncate the number with the algorithm `v - (((v % W) + W) % W)`. The `redundant` compute part is to keep the result always positive.
-    * If the column is a DECIMAL, truncate(column,width) will truncate the decimal with the algorithm: let `scaled_W = decimal(W, scale(v))`, then return `v - (v % scaled_W)`.
-* `--mysql-conf` is the configuration for Flink CDC MySQL table sources. Each configuration should be specified in the format `key=value`. `hostname`, `username`, `password`, `database-name` and `table-name` are required configurations, others are optional. See its [document](https://ververica.github.io/flink-cdc-connectors/master/content/connectors/mysql-cdc.html#connector-options) for a complete list of configurations.
-* `--catalog-conf` is the configuration for Paimon catalog. Each configuration should be specified in the format `key=value`. See [here]({{< ref "maintenance/configurations" >}}) for a complete list of catalog configurations.
-* `--table-conf` is the configuration for Paimon table sink. Each configuration should be specified in the format `key=value`. See [here]({{< ref "maintenance/configurations" >}}) for a complete list of table configurations. 
+{{< generated/mysql_sync_table >}}
 
 If the Paimon table you specify does not exist, this action will automatically create the table. Its schema will be derived from all specified MySQL tables. If the Paimon table already exists, its schema will be compared against the schema of all specified MySQL tables.
-
-This action supports a limited number of schema changes. Currently, the framework can not drop columns, so the behaviors of `DROP` will be ignored, `RENAME` will add a new column. Currently supported schema changes includes:
-
-* Adding columns.
-
-* Altering column types. More specifically,
-
-  * altering from a string type (char, varchar, text) to another string type with longer length,
-  * altering from a binary type (binary, varbinary, blob) to another binary type with longer length,
-  * altering from an integer type (tinyint, smallint, int, bigint) to another integer type with wider range,
-  * altering from a floating-point type (float, double) to another floating-point type with wider range,
-  
-  are supported. 
 
 Example
 
 ```bash
 <FLINK_HOME>/bin/flink run \
-    -c org.apache.paimon.flink.action.FlinkActions \
-    /path/to/paimon-flink-**-{{< version >}}.jar \
+    /path/to/paimon-flink-action-{{< version >}}.jar \
     mysql-sync-table \
     --warehouse hdfs:///path/to/warehouse \
     --database test_db \
@@ -117,8 +103,7 @@ To use this feature through `flink run`, run the following shell command.
 
 ```bash
 <FLINK_HOME>/bin/flink run \
-    -c org.apache.paimon.flink.action.FlinkActions \
-    /path/to/paimon-flink-**-{{< version >}}.jar \
+    /path/to/paimon-flink-action-{{< version >}}.jar \
     mysql-sync-database
     --warehouse <warehouse-path> \
     --database <database-name> \
@@ -132,45 +117,17 @@ To use this feature through `flink run`, run the following shell command.
     [--table-conf <paimon-table-sink-conf> [--table-conf <paimon-table-sink-conf> ...]]
 ```
 
-* `--warehouse` is the path to Paimon warehouse.
-* `--database` is the database name in Paimon catalog.
-* `--ignore-incompatible` is default false, in this case, if MySQL table name exists in Paimon and their schema is incompatible, 
-an exception will be thrown. You can specify it to true explicitly to ignore the incompatible tables and exception.
-* `--table-prefix` is the prefix of all Paimon tables to be synchronized. For example, if you want all synchronized tables 
-to have "ods_" as prefix, you can specify `--table-prefix ods_`.
-* `--table-suffix` is the suffix of all Paimon tables to be synchronized. The usage is same as `--table-prefix`.
-* `--including-tables` is used to specify which source tables are to be synchronized. You must use '|' to separate multiple
-tables. Regular expression is supported, for example, specifying `--including-tables test|paimon.*` means to synchronize
-table 'test' and all tables start with 'paimon'.
-* `--excluding-tables` is used to specify which source tables are not to be synchronized. The usage is same as `--including-tables`.
-`--excluding-tables` has higher priority than `--including-tables` if you specified both.
-* `--mysql-conf` is the configuration for Flink CDC MySQL table sources. Each configuration should be specified in the format `key=value`. `hostname`, `username`, `password` and `database-name` are required configurations, others are optional. Note that `database-name` should be the exact name of the MySQL databse you want to synchronize. It can't be a regular expression. See its [document](https://ververica.github.io/flink-cdc-connectors/master/content/connectors/mysql-cdc.html#connector-options) for a complete list of configurations.
-* `--catalog-conf` is the configuration for Paimon catalog. Each configuration should be specified in the format `key=value`. See [here]({{< ref "maintenance/configurations" >}}) for a complete list of catalog configurations.
-* `--table-conf` is the configuration for Paimon table sink. Each configuration should be specified in the format `key=value`. All Paimon sink table will be applied the same set of configurations. See [here]({{< ref "maintenance/configurations" >}}) for a complete list of table configurations.
+{{< generated/mysql_sync_database >}}
 
 Only tables with primary keys will be synchronized.
 
 For each MySQL table to be synchronized, if the corresponding Paimon table does not exist, this action will automatically create the table. Its schema will be derived from all specified MySQL tables. If the Paimon table already exists, its schema will be compared against the schema of all specified MySQL tables.
 
-This action supports a limited number of schema changes. Currently, the framework can not drop columns, so the behaviors of `DROP` will be ignored, `RENAME` will add a new column. Currently supported schema changes includes:
-
-* Adding columns.
-
-* Altering column types. More specifically,
-
-  * altering from a string type (char, varchar, text) to another string type with longer length,
-  * altering from a binary type (binary, varbinary, blob) to another binary type with longer length,
-  * altering from an integer type (tinyint, smallint, int, bigint) to another integer type with wider range,
-  * altering from a floating-point type (float, double) to another floating-point type with wider range,
-  
-  are supported.
-
 Example
 
 ```bash
 <FLINK_HOME>/bin/flink run \
-    -c org.apache.paimon.flink.action.FlinkActions \
-    /path/to/paimon-flink-**-{{< version >}}.jar \
+    /path/to/paimon-flink-action-{{< version >}}.jar \
     mysql-sync-database \
     --warehouse hdfs:///path/to/warehouse \
     --database test_db \
@@ -184,3 +141,111 @@ Example
     --table-conf changelog-producer=input \
     --table-conf sink.parallelism=4
 ```
+
+## Kafka
+
+### Prepare Kafka Bundled Jar
+
+```
+flink-sql-connector-kafka-*.jar
+```
+
+### Supported Formats
+Flink provides several Kafka CDC formats :canal-json、debezium-json,ogg-json,maxwell-json.
+If a message in a Kafka topic is a change event captured from another database using the Change Data Capture (CDC) tool, then you can use the Paimon Kafka CDC. Write the INSERT, UPDATE, DELETE messages parsed into the paimon table.
+<table class="table table-bordered">
+    <thead>
+      <tr>
+        <th class="text-left">Formats</th>
+        <th class="text-left">Supported</th>
+      </tr>
+    </thead>
+    <tbody>
+        <tr>
+         <td><a href="https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/connectors/table/formats/canal/">Canal CDC</a></td>
+          <td>True</td>
+        </tr>
+        <tr>
+         <td><a href="https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/connectors/table/formats/debezium/">Debezium CDC</a></td>
+         <td>False</td>
+        </tr>
+        <tr>
+         <td><a href="https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/connectors/table/formats/maxwell/ >}}">Maxwell CDC</a></td>
+        <td>False</td>
+        </tr>
+        <tr>
+         <td><a href="https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/connectors/table/formats/ogg/">OGG CDC</a></td>
+        <td>False</td>
+        </tr>
+    </tbody>
+</table>
+
+### Synchronizing Tables
+
+By using [KafkaSyncTableAction](/docs/{{< param Branch >}}/api/java/org/apache/paimon/flink/action/cdc/kafka/KafkaSyncTableAction) in a Flink DataStream job or directly through `flink run`, users can synchronize one or multiple tables from Kafka's one topic into one Paimon table.
+
+To use this feature through `flink run`, run the following shell command.
+
+```bash
+<FLINK_HOME>/bin/flink run \
+    /path/to/paimon-flink-action-{{< version >}}.jar \
+    kafka-sync-table
+    --warehouse <warehouse-path> \
+    --database <database-name> \
+    --table <table-name> \
+    [--partition-keys <partition-keys>] \
+    [--primary-keys <primary-keys>] \
+    [--computed-column <'column-name=expr-name(args[, ...])'> [--computed-column ...]] \
+    [--kafka-conf <kafka-source-conf> [--kafka-conf <kafka-source-conf> ...]] \
+    [--catalog-conf <paimon-catalog-conf> [--catalog-conf <paimon-catalog-conf> ...]] \
+    [--table-conf <paimon-table-sink-conf> [--table-conf <paimon-table-sink-conf> ...]]
+```
+
+{{< generated/kafka_sync_table >}}
+
+If the Paimon table you specify does not exist, this action will automatically create the table. Its schema will be derived from all specified Kafka topic's tables,it gets the earliest non-DDL data parsing schema from topic. If the Paimon table already exists, its schema will be compared against the schema of all specified Kafka topic's tables.
+
+Example
+
+```bash
+<FLINK_HOME>/bin/flink run \
+    /path/to/paimon-flink-action-{{< version >}}.jar \
+    kafka-sync-table \
+    --warehouse hdfs:///path/to/warehouse \
+    --database test_db \
+    --table test_table \
+    --partition-keys pt \
+    --primary-keys pt,uid \
+    --computed-columns '_year=year(age)' \
+    --kafka-conf properties.bootstrap.servers=127.0.0.1:9020 \
+    --kafka-conf topic=order \
+    --kafka-conf properties.group.id=123456 \
+    --kafka-conf value.format=canal-json \
+    --catalog-conf metastore=hive \
+    --catalog-conf uri=thrift://hive-metastore:9083 \
+    --table-conf bucket=4 \
+    --table-conf changelog-producer=input \
+    --table-conf sink.parallelism=4
+```
+
+## Schema Change Evolution
+
+Cdc Ingestion supports a limited number of schema changes. Currently, the framework can not drop columns, so the
+behaviors of `DROP` will be ignored, `RENAME` will add a new column. Currently supported schema changes includes:
+
+* Adding columns.
+
+* Altering column types. More specifically,
+
+  * altering from a string type (char, varchar, text) to another string type with longer length,
+  * altering from a binary type (binary, varbinary, blob) to another binary type with longer length,
+  * altering from an integer type (tinyint, smallint, int, bigint) to another integer type with wider range,
+  * altering from a floating-point type (float, double) to another floating-point type with wider range,
+
+  are supported.
+
+## Computed Functions
+
+`--computed-column` are the definitions of computed columns. The argument field is from Kafka topic's table field name. Supported expressions are:
+
+{{< generated/compute_column >}}

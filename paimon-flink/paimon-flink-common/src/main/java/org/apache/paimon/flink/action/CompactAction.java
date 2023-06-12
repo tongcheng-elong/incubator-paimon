@@ -46,18 +46,19 @@ import static org.apache.paimon.flink.action.Action.getPartitions;
 import static org.apache.paimon.flink.action.Action.getTablePath;
 
 /** Table compact action for Flink. */
-public class CompactAction extends ActionBase {
+public class CompactAction extends TableActionBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(CompactAction.class);
 
     private final CompactorSourceBuilder sourceBuilder;
     private final CompactorSinkBuilder sinkBuilder;
 
-    CompactAction(String warehouse, String database, String tableName) {
+    public CompactAction(String warehouse, String database, String tableName) {
         this(warehouse, database, tableName, new Options());
     }
 
-    CompactAction(String warehouse, String database, String tableName, Options catalogOptions) {
+    public CompactAction(
+            String warehouse, String database, String tableName, Options catalogOptions) {
         super(warehouse, database, tableName, catalogOptions);
         if (!(table instanceof FileStoreTable)) {
             throw new UnsupportedOperationException(
@@ -169,6 +170,6 @@ public class CompactAction extends ActionBase {
     public void run() throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         build(env);
-        env.execute("Compact job");
+        execute(env, "Compact job");
     }
 }

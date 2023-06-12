@@ -18,7 +18,7 @@
 package org.apache.paimon.flink.sink;
 
 import org.apache.flink.metrics.Gauge;
-import org.apache.paimon.manifest.ManifestCommittable;
+import org.apache.paimon.utils.SerializableFunction;
 
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
@@ -28,7 +28,6 @@ import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.flink.util.function.SerializableFunction;
 import org.apache.paimon.operation.FileStoreCommit;
 import org.apache.paimon.operation.FileStoreCommitImpl;
 import org.apache.paimon.utils.SnapshotManager;
@@ -36,7 +35,6 @@ import org.apache.paimon.utils.SnapshotManager;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -45,13 +43,13 @@ import java.util.TreeMap;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
 /** Operator to commit {@link Committable}s for each snapshot. */
-public class CommitterOperator extends AbstractStreamOperator<Committable>
-        implements OneInputStreamOperator<Committable, Committable>, BoundedOneInput {
+public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOperator<CommitT>
+        implements OneInputStreamOperator<CommitT, CommitT>, BoundedOneInput {
 
     private static final long serialVersionUID = 1L;
 
     /** Record all the inputs until commit. */
-    private final Deque<Committable> inputs = new ArrayDeque<>();
+    private final Deque<CommitT> inputs = new ArrayDeque<>();
 
     /**
      * If checkpoint is enabled we should do nothing in {@link CommitterOperator#endInput}.
@@ -69,17 +67,17 @@ public class CommitterOperator extends AbstractStreamOperator<Committable>
     private final String initialCommitUser;
 
     /** Group the committable by the checkpoint id. */
-    protected final NavigableMap<Long, ManifestCommittable> committablesPerCheckpoint;
+    protected final NavigableMap<Long, GlobalCommitT> committablesPerCheckpoint;
 
-    private final SerializableFunction<String, Committer> committerFactory;
+    private final SerializableFunction<String, Committer<CommitT, GlobalCommitT>> committerFactory;
 
-    private final CommittableStateManager committableStateManager;
+    private final CommittableStateManager<GlobalCommitT> committableStateManager;
 
     /**
      * Aggregate committables to global committables and commit the global committables to the
      * external system.
      */
-    protected Committer committer;
+    protected Committer<CommitT, GlobalCommitT> committer;
 
     private transient long currentWatermark;
 
@@ -90,8 +88,8 @@ public class CommitterOperator extends AbstractStreamOperator<Committable>
     public CommitterOperator(
             boolean streamingCheckpointEnabled,
             String initialCommitUser,
-            SerializableFunction<String, Committer> committerFactory,
-            CommittableStateManager committableStateManager) {
+            SerializableFunction<String, Committer<CommitT, GlobalCommitT>> committerFactory,
+            CommittableStateManager<GlobalCommitT> committableStateManager) {
         this.streamingCheckpointEnabled = streamingCheckpointEnabled;
         this.initialCommitUser = initialCommitUser;
         this.committablesPerCheckpoint = new TreeMap<>();
@@ -136,8 +134,7 @@ public class CommitterOperator extends AbstractStreamOperator<Committable>
         }
     }
 
-    private ManifestCommittable toCommittables(long checkpoint, List<Committable> inputs)
-            throws Exception {
+    private GlobalCommitT toCommittables(long checkpoint, List<CommitT> inputs) throws Exception {
         return committer.combine(checkpoint, currentWatermark, inputs);
     }
 
@@ -148,7 +145,7 @@ public class CommitterOperator extends AbstractStreamOperator<Committable>
         committableStateManager.snapshotState(context, committables(committablesPerCheckpoint));
     }
 
-    private List<ManifestCommittable> committables(NavigableMap<Long, ManifestCommittable> map) {
+    private List<GlobalCommitT> committables(NavigableMap<Long, GlobalCommitT> map) {
         return new ArrayList<>(map.values());
     }
 
@@ -170,7 +167,7 @@ public class CommitterOperator extends AbstractStreamOperator<Committable>
     }
 
     private void commitUpToCheckpoint(long checkpointId) throws Exception {
-        NavigableMap<Long, ManifestCommittable> headMap =
+        NavigableMap<Long, GlobalCommitT> headMap =
                 committablesPerCheckpoint.headMap(checkpointId, true);
         committer.commit(committables(headMap));
         headMap.clear();
@@ -189,7 +186,7 @@ public class CommitterOperator extends AbstractStreamOperator<Committable>
     }
 
     @Override
-    public void processElement(StreamRecord<Committable> element) {
+    public void processElement(StreamRecord<CommitT> element) {
         output.collect(element);
         this.inputs.add(element.getValue());
     }
@@ -203,14 +200,11 @@ public class CommitterOperator extends AbstractStreamOperator<Committable>
     }
 
     private void pollInputs() throws Exception {
-        Map<Long, List<Committable>> grouped = new HashMap<>();
-        for (Committable c : inputs) {
-            grouped.computeIfAbsent(c.checkpointId(), k -> new ArrayList<>()).add(c);
-        }
+        Map<Long, List<CommitT>> grouped = committer.groupByCheckpoint(inputs);
 
-        for (Map.Entry<Long, List<Committable>> entry : grouped.entrySet()) {
+        for (Map.Entry<Long, List<CommitT>> entry : grouped.entrySet()) {
             Long cp = entry.getKey();
-            List<Committable> committables = entry.getValue();
+            List<CommitT> committables = entry.getValue();
             if (committablesPerCheckpoint.containsKey(cp)) {
                 throw new RuntimeException(
                         String.format(
