@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 /** A {@link StreamPartitioner} which wraps a {@link ChannelComputer}. */
 public class FlinkStreamPartitioner<T> extends StreamPartitioner<T> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BucketingStreamPartitioner.class);
+    private static final Logger LOG = LoggerFactory.getLogger(FlinkStreamPartitioner.class);
 
     private final ChannelComputer<T> channelComputer;
 
