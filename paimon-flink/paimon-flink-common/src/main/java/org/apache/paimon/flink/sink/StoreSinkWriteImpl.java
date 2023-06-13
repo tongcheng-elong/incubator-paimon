@@ -48,7 +48,7 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
     protected final String commitUser;
     protected final StoreSinkWriteState state;
     private final IOManager ioManager;
-    private final boolean isOverwrite;
+    private final boolean emptyWriter;
     private final boolean waitCompaction;
     @Nullable private final MemorySegmentPool memoryPool;
 
@@ -59,13 +59,13 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
             String commitUser,
             StoreSinkWriteState state,
             IOManager ioManager,
-            boolean isOverwrite,
+            boolean emptyWriter,
             boolean waitCompaction,
             @Nullable MemorySegmentPool memoryPool) {
         this.commitUser = commitUser;
         this.state = state;
         this.ioManager = ioManager;
-        this.isOverwrite = isOverwrite;
+        this.emptyWriter = emptyWriter;
         this.waitCompaction = waitCompaction;
         this.memoryPool = memoryPool;
         this.write = newTableWrite(table);
@@ -83,7 +83,7 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
                                 : new HeapMemorySegmentPool(
                                         table.coreOptions().writeBufferSize(),
                                         table.coreOptions().pageSize()))
-                .withOverwrite(isOverwrite);
+                .fromEmptyWriter(emptyWriter);
     }
 
     @Override
@@ -151,9 +151,9 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
             return;
         }
 
-        List<AbstractFileStoreWrite.State> states = write.checkpoint();
+        List<? extends AbstractFileStoreWrite.State<?>> states = write.checkpoint();
         write.close();
         write = newTableWrite(newTable);
-        write.restore(states);
+        write.restore((List) states);
     }
 }

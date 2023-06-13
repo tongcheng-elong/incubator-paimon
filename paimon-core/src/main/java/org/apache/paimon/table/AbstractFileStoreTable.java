@@ -21,7 +21,7 @@ package org.apache.paimon.table;
 import org.apache.paimon.CoreOptions;
 import org.apache.paimon.FileStore;
 import org.apache.paimon.Snapshot;
-import org.apache.paimon.annotation.VisibleForTesting;
+import org.apache.paimon.consumer.ConsumerManager;
 import org.apache.paimon.fs.FileIO;
 import org.apache.paimon.fs.Path;
 import org.apache.paimon.operation.FileStoreScan;
@@ -30,7 +30,11 @@ import org.apache.paimon.predicate.Predicate;
 import org.apache.paimon.schema.SchemaManager;
 import org.apache.paimon.schema.SchemaValidation;
 import org.apache.paimon.schema.TableSchema;
+import org.apache.paimon.table.sink.DynamicBucketRowKeyExtractor;
+import org.apache.paimon.table.sink.FixedBucketRowKeyExtractor;
+import org.apache.paimon.table.sink.RowKeyExtractor;
 import org.apache.paimon.table.sink.TableCommitImpl;
+import org.apache.paimon.table.sink.UnawareBucketRowKeyExtractor;
 import org.apache.paimon.table.source.InnerStreamTableScan;
 import org.apache.paimon.table.source.InnerStreamTableScanImpl;
 import org.apache.paimon.table.source.InnerTableScan;
@@ -40,6 +44,7 @@ import org.apache.paimon.table.source.snapshot.SnapshotSplitReader;
 import org.apache.paimon.table.source.snapshot.SnapshotSplitReaderImpl;
 import org.apache.paimon.table.source.snapshot.StaticFromTimestampStartingScanner;
 import org.apache.paimon.utils.SnapshotManager;
+import org.apache.paimon.utils.TagManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +57,7 @@ import java.util.Optional;
 import java.util.function.BiConsumer;
 
 import static org.apache.paimon.CoreOptions.PATH;
+import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /** Abstract {@link FileStoreTable}. */
 public abstract class AbstractFileStoreTable implements FileStoreTable {
@@ -75,8 +81,25 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
         this.tableSchema = tableSchema;
     }
 
-    @VisibleForTesting
     public abstract FileStore<?> store();
+
+    @Override
+    public BucketMode bucketMode() {
+        return store().bucketMode();
+    }
+
+    public RowKeyExtractor createRowKeyExtractor() {
+        switch (bucketMode()) {
+            case FIXED:
+                return new FixedBucketRowKeyExtractor(schema());
+            case DYNAMIC:
+                return new DynamicBucketRowKeyExtractor(schema());
+            case UNAWARE:
+                return new UnawareBucketRowKeyExtractor(schema());
+            default:
+                throw new UnsupportedOperationException("Unsupported mode: " + bucketMode());
+        }
+    }
 
     @Override
     public SnapshotSplitReader newSnapshotSplitReader() {
@@ -208,7 +231,9 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
         return new TableCommitImpl(
                 store().newCommit(commitUser),
                 coreOptions().writeOnly() ? null : store().newExpire(),
-                coreOptions().writeOnly() ? null : store().newPartitionExpire(commitUser));
+                coreOptions().writeOnly() ? null : store().newPartitionExpire(commitUser),
+                CoreOptions.fromMap(options()).consumerExpireTime(),
+                new ConsumerManager(fileIO, path));
     }
 
     private Optional<TableSchema> tryTimeTravel(Options options) {
@@ -251,5 +276,18 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    @Override
+    public void createTag(String tagName, long fromSnapshotId) {
+        SnapshotManager snapshotManager = snapshotManager();
+        checkArgument(
+                snapshotManager.snapshotExists(fromSnapshotId),
+                "Cannot create tag because given snapshot #%s doesn't exist.",
+                fromSnapshotId);
+
+        Snapshot snapshot = snapshotManager.snapshot(fromSnapshotId);
+        TagManager tagManager = new TagManager(fileIO, path);
+        tagManager.createTag(snapshot, tagName);
     }
 }

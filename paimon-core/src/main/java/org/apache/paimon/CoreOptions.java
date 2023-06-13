@@ -611,13 +611,12 @@ public class CoreOptions implements Serializable {
                             "Full compaction will be constantly triggered after delta commits.");
 
     @ExcludeFromDocumentation("Internal use only")
-    public static final ConfigOption<Boolean> STREAMING_COMPACT =
+    public static final ConfigOption<StreamingCompactionType> STREAMING_COMPACT =
             key("streaming-compact")
-                    .booleanType()
-                    .defaultValue(false)
+                    .enumType(StreamingCompactionType.class)
+                    .defaultValue(StreamingCompactionType.NONE)
                     .withDescription(
-                            "Only used to force TableScan to construct 'ContinuousCompactorStartingScanner' and "
-                                    + "'ContinuousCompactorFollowUpScanner' for dedicated streaming compaction job.");
+                            "Only used to force TableScan to construct suitable 'StartingUpScanner' and 'FollowUpScanner' dedicated streaming compaction job.");
 
     public static final ConfigOption<StreamingReadMode> STREAMING_READ_MODE =
             key("streaming-read-mode")
@@ -640,6 +639,22 @@ public class CoreOptions implements Serializable {
                                                     StreamingReadMode.LOG.getValue()
                                                             + ": Read from the data of table log store."))
                                     .build());
+
+    public static final ConfigOption<Duration> CONSUMER_EXPIRATION_TIME =
+            key("consumer.expiration-time")
+                    .durationType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "The expiration interval of consumer files. A consumer file will be expired if "
+                                    + "it's lifetime after last modification is over this value.");
+
+    public static final ConfigOption<Long> DYNAMIC_BUCKET_TARGET_ROW_NUM =
+            key("dynamic-bucket.target-row-num")
+                    .longType()
+                    .defaultValue(2_000_000L)
+                    .withDescription(
+                            "If the bucket is -1, for primary key table, is dynamic bucket mode, "
+                                    + "this option controls the target row number for one bucket.");
 
     private final Options options;
 
@@ -830,6 +845,10 @@ public class CoreOptions implements Serializable {
         return options.get(COMPACTION_MAX_SORTED_RUN_NUM);
     }
 
+    public long dynamicBucketTargetRowNum() {
+        return options.get(DYNAMIC_BUCKET_TARGET_ROW_NUM);
+    }
+
     public ChangelogProducer changelogProducer() {
         return options.get(CHANGELOG_PRODUCER);
     }
@@ -925,6 +944,10 @@ public class CoreOptions implements Serializable {
 
     public static StreamingReadMode streamReadType(Options options) {
         return options.get(STREAMING_READ_MODE);
+    }
+
+    public Duration consumerExpireTime() {
+        return options.get(CONSUMER_EXPIRATION_TIME);
     }
 
     /** Specifies the merge engine for table with primary key. */
@@ -1199,6 +1222,51 @@ public class CoreOptions implements Serializable {
                             value,
                             StringUtils.join(
                                     Arrays.stream(StreamingReadMode.values()).iterator(), ",")));
+        }
+    }
+
+    /** Compaction type when trigger a compaction action. */
+    public enum StreamingCompactionType implements DescribedEnum {
+        NONE("none", "Not a streaming compaction."),
+        NORMAL("normal", "Compaction for traditional bucket table."),
+        BUCKET_UNAWARE("unaware", "Compaction for unaware bucket table.");
+
+        private final String value;
+        private final String description;
+
+        StreamingCompactionType(String value, String description) {
+            this.value = value;
+            this.description = description;
+        }
+
+        @Override
+        public String toString() {
+            return value;
+        }
+
+        @Override
+        public InlineElement getDescription() {
+            return text(description);
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        @VisibleForTesting
+        public static StreamingCompactionType fromValue(String value) {
+            for (StreamingCompactionType formatType : StreamingCompactionType.values()) {
+                if (formatType.value.equals(value)) {
+                    return formatType;
+                }
+            }
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Invalid format type %s, only support [%s]",
+                            value,
+                            StringUtils.join(
+                                    Arrays.stream(StreamingCompactionType.values()).iterator(),
+                                    ",")));
         }
     }
 

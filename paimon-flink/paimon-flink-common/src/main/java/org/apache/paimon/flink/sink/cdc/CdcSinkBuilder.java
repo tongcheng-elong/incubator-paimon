@@ -19,10 +19,11 @@
 package org.apache.paimon.flink.sink.cdc;
 
 import org.apache.paimon.annotation.Experimental;
-import org.apache.paimon.flink.sink.BucketingStreamPartitioner;
+import org.apache.paimon.flink.sink.FlinkStreamPartitioner;
 import org.apache.paimon.flink.utils.SingleOutputStreamOperatorUtils;
 import org.apache.paimon.operation.Lock;
 import org.apache.paimon.schema.SchemaManager;
+import org.apache.paimon.table.BucketMode;
 import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.table.Table;
 import org.apache.paimon.utils.Preconditions;
@@ -102,8 +103,27 @@ public class CdcSinkBuilder<T> {
         schemaChangeProcessFunction.getTransformation().setParallelism(1);
         schemaChangeProcessFunction.getTransformation().setMaxParallelism(1);
 
-        BucketingStreamPartitioner<CdcRecord> partitioner =
-                new BucketingStreamPartitioner<>(new CdcRecordChannelComputer(dataTable.schema()));
+        BucketMode bucketMode = dataTable.bucketMode();
+        switch (bucketMode) {
+            case FIXED:
+                return buildForFixedBucket(parsed);
+            case DYNAMIC:
+                return buildForDynamicBucket(parsed);
+            case UNAWARE:
+            default:
+                throw new UnsupportedOperationException("Unsupported bucket mode: " + bucketMode);
+        }
+    }
+
+    private DataStreamSink<?> buildForDynamicBucket(DataStream<CdcRecord> parsed) {
+        return new CdcDynamicBucketSink((FileStoreTable) table, lockFactory)
+                .build(parsed, parallelism);
+    }
+
+    private DataStreamSink<?> buildForFixedBucket(DataStream<CdcRecord> parsed) {
+        FileStoreTable dataTable = (FileStoreTable) table;
+        FlinkStreamPartitioner<CdcRecord> partitioner =
+                new FlinkStreamPartitioner<>(new CdcRecordChannelComputer(dataTable.schema()));
         PartitionTransformation<CdcRecord> partitioned =
                 new PartitionTransformation<>(parsed.getTransformation(), partitioner);
         if (parallelism != null) {

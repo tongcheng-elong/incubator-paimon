@@ -19,10 +19,11 @@
 package org.apache.paimon.flink.action;
 
 import org.apache.paimon.CoreOptions;
+import org.apache.paimon.flink.compact.UnawareBucketCompactionTopoBuilder;
 import org.apache.paimon.flink.sink.CompactorSinkBuilder;
 import org.apache.paimon.flink.source.CompactorSourceBuilder;
 import org.apache.paimon.flink.utils.StreamExecutionEnvironmentUtils;
-import org.apache.paimon.options.Options;
+import org.apache.paimon.table.AppendOnlyFileStoreTable;
 import org.apache.paimon.table.FileStoreTable;
 
 import org.apache.flink.api.common.RuntimeExecutionMode;
@@ -41,25 +42,27 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.paimon.flink.action.Action.getConfigMap;
 import static org.apache.paimon.flink.action.Action.getPartitions;
 import static org.apache.paimon.flink.action.Action.getTablePath;
+import static org.apache.paimon.flink.action.Action.optionalConfigMap;
 
 /** Table compact action for Flink. */
 public class CompactAction extends TableActionBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(CompactAction.class);
 
-    private final CompactorSourceBuilder sourceBuilder;
-    private final CompactorSinkBuilder sinkBuilder;
+    private List<Map<String, String>> partitions;
 
     public CompactAction(String warehouse, String database, String tableName) {
-        this(warehouse, database, tableName, new Options());
+        this(warehouse, database, tableName, Collections.emptyMap());
     }
 
     public CompactAction(
-            String warehouse, String database, String tableName, Options catalogOptions) {
-        super(warehouse, database, tableName, catalogOptions);
+            String warehouse,
+            String database,
+            String tableName,
+            Map<String, String> catalogConfig) {
+        super(warehouse, database, tableName, catalogConfig);
         if (!(table instanceof FileStoreTable)) {
             throw new UnsupportedOperationException(
                     String.format(
@@ -67,9 +70,6 @@ public class CompactAction extends TableActionBase {
                             table.getClass().getName()));
         }
         table = table.copy(Collections.singletonMap(CoreOptions.WRITE_ONLY.key(), "false"));
-        sourceBuilder =
-                new CompactorSourceBuilder(identifier.getFullName(), (FileStoreTable) table);
-        sinkBuilder = new CompactorSinkBuilder((FileStoreTable) table);
     }
 
     // ------------------------------------------------------------------------
@@ -77,7 +77,7 @@ public class CompactAction extends TableActionBase {
     // ------------------------------------------------------------------------
 
     public CompactAction withPartitions(List<Map<String, String>> partitions) {
-        sourceBuilder.withPartitions(partitions);
+        this.partitions = partitions;
         return this;
     }
 
@@ -85,10 +85,43 @@ public class CompactAction extends TableActionBase {
         ReadableConfig conf = StreamExecutionEnvironmentUtils.getConfiguration(env);
         boolean isStreaming =
                 conf.get(ExecutionOptions.RUNTIME_MODE) == RuntimeExecutionMode.STREAMING;
+        FileStoreTable fileStoreTable = (FileStoreTable) table;
+        switch (fileStoreTable.bucketMode()) {
+            case UNAWARE:
+                {
+                    buildForUnawareBucketCompaction(
+                            env, (AppendOnlyFileStoreTable) table, isStreaming);
+                    break;
+                }
+            case FIXED:
+            case DYNAMIC:
+            default:
+                {
+                    buildForTraditionalCompaction(env, fileStoreTable, isStreaming);
+                }
+        }
+    }
 
+    private void buildForTraditionalCompaction(
+            StreamExecutionEnvironment env, FileStoreTable table, boolean isStreaming) {
+        CompactorSourceBuilder sourceBuilder =
+                new CompactorSourceBuilder(identifier.getFullName(), table);
+        CompactorSinkBuilder sinkBuilder = new CompactorSinkBuilder(table);
+
+        sourceBuilder.withPartitions(partitions);
         DataStreamSource<RowData> source =
                 sourceBuilder.withEnv(env).withContinuousMode(isStreaming).build();
         sinkBuilder.withInput(source).build();
+    }
+
+    private void buildForUnawareBucketCompaction(
+            StreamExecutionEnvironment env, AppendOnlyFileStoreTable table, boolean isStreaming) {
+        UnawareBucketCompactionTopoBuilder unawareBucketCompactionTopoBuilder =
+                new UnawareBucketCompactionTopoBuilder(env, identifier.getFullName(), table);
+
+        unawareBucketCompactionTopoBuilder.withPartitions(partitions);
+        unawareBucketCompactionTopoBuilder.withContinuousMode(isStreaming);
+        unawareBucketCompactionTopoBuilder.build();
     }
 
     // ------------------------------------------------------------------------
@@ -111,12 +144,10 @@ public class CompactAction extends TableActionBase {
             return Optional.empty();
         }
 
-        Optional<Map<String, String>> catalogConfigOption = getConfigMap(params, "catalog-conf");
-        Options catalogOptions =
-                Options.fromMap(catalogConfigOption.orElse(Collections.emptyMap()));
+        Map<String, String> catalogConfig = optionalConfigMap(params, "catalog-conf");
 
         CompactAction action =
-                new CompactAction(tablePath.f0, tablePath.f1, tablePath.f2, catalogOptions);
+                new CompactAction(tablePath.f0, tablePath.f1, tablePath.f2, catalogConfig);
 
         if (params.has("partition")) {
             List<Map<String, String>> partitions = getPartitions(params);
