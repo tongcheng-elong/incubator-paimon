@@ -44,7 +44,7 @@ public class StaticFromTimestampStartingScanner implements StartingScanner {
     }
 
     @Override
-    public Result scan(SnapshotManager snapshotManager, SnapshotSplitReader snapshotSplitReader) {
+    public Result scan(SnapshotManager snapshotManager, SnapshotReader snapshotReader) {
         Snapshot startingSnapshot = timeTravelToTimestamp(snapshotManager, startupMillis);
         if (startingSnapshot == null) {
             LOG.debug(
@@ -53,12 +53,8 @@ public class StaticFromTimestampStartingScanner implements StartingScanner {
             return new NoSnapshot();
         }
         LOG.info("get startingSnapshot:{}, from timestamp:{}",startingSnapshot.id(),startupMillis);
-        return new ScannedResult(
-                startingSnapshot.id(),
-                snapshotSplitReader
-                        .withKind(ScanKind.ALL)
-                        .withSnapshot(startingSnapshot.id())
-                        .splits());
+        return StartingScanner.fromPlan(
+                snapshotReader.withKind(ScanKind.ALL).withSnapshot(startingSnapshot.id()).read());
     }
 
     @Nullable

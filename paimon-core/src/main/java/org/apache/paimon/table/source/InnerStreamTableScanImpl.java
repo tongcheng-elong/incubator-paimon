@@ -29,8 +29,9 @@ import org.apache.paimon.table.source.snapshot.ContinuousCompactorFollowUpScanne
 import org.apache.paimon.table.source.snapshot.DeltaFollowUpScanner;
 import org.apache.paimon.table.source.snapshot.FollowUpScanner;
 import org.apache.paimon.table.source.snapshot.InputChangelogFollowUpScanner;
-import org.apache.paimon.table.source.snapshot.SnapshotSplitReader;
+import org.apache.paimon.table.source.snapshot.SnapshotReader;
 import org.apache.paimon.table.source.snapshot.StartingScanner;
+import org.apache.paimon.table.source.snapshot.StartingScanner.ScannedResult;
 import org.apache.paimon.utils.SnapshotManager;
 
 import org.slf4j.Logger;
@@ -54,14 +55,15 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
     private FollowUpScanner followUpScanner;
     private BoundedChecker boundedChecker;
     private boolean isFullPhaseEnd = false;
+    @Nullable private Long currentWatermark;
     @Nullable private Long nextSnapshotId;
 
     public InnerStreamTableScanImpl(
             CoreOptions options,
-            SnapshotSplitReader snapshotSplitReader,
+            SnapshotReader snapshotReader,
             SnapshotManager snapshotManager,
             boolean supportStreamingReadOverwrite) {
-        super(options, snapshotSplitReader);
+        super(options, snapshotReader);
         this.options = options;
         this.snapshotManager = snapshotManager;
         this.supportStreamingReadOverwrite = supportStreamingReadOverwrite;
@@ -69,7 +71,7 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
 
     @Override
     public InnerStreamTableScanImpl withFilter(Predicate predicate) {
-        snapshotSplitReader.withFilter(predicate);
+        snapshotReader.withFilter(predicate);
         return this;
     }
 
@@ -93,9 +95,11 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
     }
 
     private Plan tryFirstPlan() {
-        StartingScanner.Result result = startingScanner.scan(snapshotManager, snapshotSplitReader);
-        if (result instanceof StartingScanner.ScannedResult) {
-            long currentSnapshotId = ((StartingScanner.ScannedResult) result).currentSnapshotId();
+        StartingScanner.Result result = startingScanner.scan(snapshotManager, snapshotReader);
+        if (result instanceof ScannedResult) {
+            ScannedResult scannedResult = (ScannedResult) result;
+            currentWatermark = scannedResult.currentWatermark();
+            long currentSnapshotId = scannedResult.currentSnapshotId();
             nextSnapshotId = currentSnapshotId + 1;
             LOG.info("start scan from snapshot:{}",currentSnapshotId);
             isFullPhaseEnd =
@@ -143,14 +147,16 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
             if (snapshot.commitKind() == Snapshot.CommitKind.OVERWRITE
                     && supportStreamingReadOverwrite) {
                 LOG.debug("Find overwrite snapshot id {}.", nextSnapshotId);
-                Plan overwritePlan =
-                        followUpScanner.getOverwriteChangesPlan(
-                                nextSnapshotId, snapshotSplitReader);
+                SnapshotReader.Plan overwritePlan =
+                        followUpScanner.getOverwriteChangesPlan(nextSnapshotId, snapshotReader);
+                currentWatermark = overwritePlan.watermark();
                 nextSnapshotId++;
                 return overwritePlan;
             } else if (followUpScanner.shouldScanSnapshot(snapshot)) {
+                LOG.debug("Find snapshot id {}.", nextSnapshotId);
+                SnapshotReader.Plan plan = followUpScanner.scan(nextSnapshotId, snapshotReader);
                 LOG.info("Find snapshot id {}.", nextSnapshotId);
-                Plan plan = followUpScanner.scan(nextSnapshotId, snapshotSplitReader);
+                currentWatermark = plan.watermark();
                 nextSnapshotId++;
                 return plan;
             } else {
@@ -184,12 +190,12 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
                 break;
             case FULL_COMPACTION:
                 // this change in data split reader will affect both starting scanner and follow-up
-                snapshotSplitReader.withLevelFilter(level -> level == options.numLevels() - 1);
+                snapshotReader.withLevelFilter(level -> level == options.numLevels() - 1);
                 followUpScanner = new CompactionChangelogFollowUpScanner();
                 break;
             case LOOKUP:
                 // this change in data split reader will affect both starting scanner and follow-up
-                snapshotSplitReader.withLevelFilter(level -> level > 0);
+                snapshotReader.withLevelFilter(level -> level > 0);
                 followUpScanner = new CompactionChangelogFollowUpScanner();
                 break;
             default:
@@ -212,6 +218,12 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
         return nextSnapshotId;
     }
 
+    @Nullable
+    @Override
+    public Long watermark() {
+        return currentWatermark;
+    }
+
     @Override
     public void restore(@Nullable Long nextSnapshotId) {
         this.nextSnapshotId = nextSnapshotId;
@@ -225,9 +237,7 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
 
         String consumerId = options.consumerId();
         if (consumerId != null) {
-            snapshotSplitReader
-                    .consumerManager()
-                    .recordConsumer(consumerId, new Consumer(nextSnapshot));
+            snapshotReader.consumerManager().recordConsumer(consumerId, new Consumer(nextSnapshot));
         }
     }
 }

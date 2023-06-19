@@ -60,8 +60,8 @@ public class TableWriteImpl<T>
     }
 
     @Override
-    public TableWriteImpl<T> fromEmptyWriter(boolean emptyWriter) {
-        write.fromEmptyWriter(emptyWriter);
+    public TableWriteImpl<T> withIgnorePreviousFiles(boolean ignorePreviousFiles) {
+        write.withIgnorePreviousFiles(ignorePreviousFiles);
         return this;
     }
 

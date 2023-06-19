@@ -62,11 +62,11 @@ public abstract class FlinkSink<T> implements Serializable {
     private static final String GLOBAL_COMMITTER_NAME = "Global Committer";
 
     protected final FileStoreTable table;
-    private final boolean emptyWriter;
+    private final boolean ignorePreviousFiles;
 
-    public FlinkSink(FileStoreTable table, boolean emptyWriter) {
+    public FlinkSink(FileStoreTable table, boolean ignorePreviousFiles) {
         this.table = table;
-        this.emptyWriter = emptyWriter;
+        this.ignorePreviousFiles = ignorePreviousFiles;
     }
 
     private StoreSinkWrite.Provider createWriteProvider(CheckpointConfig checkpointConfig) {
@@ -100,7 +100,7 @@ public abstract class FlinkSink<T> implements Serializable {
                                 commitUser,
                                 state,
                                 ioManager,
-                                emptyWriter,
+                                ignorePreviousFiles,
                                 waitCompaction,
                                 finalDeltaCommits,
                                 memoryPool);
@@ -113,7 +113,7 @@ public abstract class FlinkSink<T> implements Serializable {
                         commitUser,
                         state,
                         ioManager,
-                        emptyWriter,
+                        ignorePreviousFiles,
                         waitCompaction,
                         memoryPool);
     }

@@ -137,6 +137,7 @@ public class TestFileStore extends KeyValueFileStore {
                 millisRetained,
                 pathFactory(),
                 snapshotManager(),
+                newIndexFileHandler(),
                 manifestFileFactory(),
                 manifestListFactory());
     }
@@ -239,7 +240,7 @@ public class TestFileStore extends KeyValueFileStore {
             List<KeyValue> kvs,
             Function<KeyValue, BinaryRow> partitionCalculator,
             Function<KeyValue, Integer> bucketCalculator,
-            boolean emptyWriter,
+            boolean ignorePreviousFiles,
             Long identifier,
             Long watermark,
             List<IndexFileMeta> indexFiles,
@@ -257,7 +258,7 @@ public class TestFileStore extends KeyValueFileStore {
                                 if (w == null) {
                                     RecordWriter<KeyValue> writer =
                                             write.createWriterContainer(
-                                                            partition, bucket, emptyWriter)
+                                                            partition, bucket, ignorePreviousFiles)
                                                     .writer;
                                     ((MemoryOwner) writer)
                                             .setMemoryPool(
@@ -280,7 +281,8 @@ public class TestFileStore extends KeyValueFileStore {
                 writers.entrySet()) {
             for (Map.Entry<Integer, RecordWriter<KeyValue>> entryWithBucket :
                     entryWithPartition.getValue().entrySet()) {
-                CommitIncrement increment = entryWithBucket.getValue().prepareCommit(emptyWriter);
+                CommitIncrement increment =
+                        entryWithBucket.getValue().prepareCommit(ignorePreviousFiles);
                 committable.addFileCommittable(
                         new CommitMessageImpl(
                                 entryWithPartition.getKey(),
