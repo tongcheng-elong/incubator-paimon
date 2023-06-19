@@ -20,6 +20,7 @@ package org.apache.paimon.table;
 
 import org.apache.paimon.CoreOptions;
 import org.apache.paimon.CoreOptions.ChangelogProducer;
+import org.apache.paimon.KeyValue;
 import org.apache.paimon.WriteMode;
 import org.apache.paimon.data.BinaryString;
 import org.apache.paimon.data.GenericRow;
@@ -42,6 +43,7 @@ import org.apache.paimon.table.sink.InnerTableCommit;
 import org.apache.paimon.table.sink.StreamTableCommit;
 import org.apache.paimon.table.sink.StreamTableWrite;
 import org.apache.paimon.table.sink.StreamWriteBuilder;
+import org.apache.paimon.table.sink.TableWriteImpl;
 import org.apache.paimon.table.source.DataSplit;
 import org.apache.paimon.table.source.ReadBuilder;
 import org.apache.paimon.table.source.Split;
@@ -63,6 +65,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -70,6 +73,7 @@ import static org.apache.paimon.CoreOptions.BUCKET;
 import static org.apache.paimon.data.DataFormatTestUtil.internalRowToString;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** Tests for {@link ChangelogWithKeyFileStoreTable}. */
 public class ChangelogWithKeyFileStoreTableTest extends FileStoreTableTestBase {
@@ -152,6 +156,58 @@ public class ChangelogWithKeyFileStoreTableTest extends FileStoreTableTestBase {
                         Arrays.asList(
                                 "1|10|200|binary|varbinary|mapKey:mapVal|multiset",
                                 "1|11|101|binary|varbinary|mapKey:mapVal|multiset"));
+    }
+
+    @Test
+    public void testPaddingSequenceNumber() throws Exception {
+        RowType rowType =
+                RowType.of(
+                        new DataType[] {
+                            DataTypes.INT(),
+                            DataTypes.INT(),
+                            DataTypes.INT(),
+                            DataTypes.INT(),
+                            DataTypes.STRING()
+                        },
+                        new String[] {"pt", "a", "b", "sec", "non_time"});
+        GenericRow row1 = GenericRow.of(1, 10, 100, 1685530987, BinaryString.fromString("a1"));
+        GenericRow row2 = GenericRow.of(1, 10, 101, 1685530987, BinaryString.fromString("a2"));
+        FileStoreTable table =
+                createFileStoreTable(
+                        conf -> {
+                            conf.set(CoreOptions.SEQUENCE_FIELD, "sec");
+                            conf.set(
+                                    CoreOptions.SEQUENCE_AUTO_PADDING,
+                                    CoreOptions.SequenceAutoPadding.SECOND_TO_MICRO);
+                        },
+                        rowType);
+        StreamTableWrite write = table.newWrite(commitUser);
+        StreamTableCommit commit = table.newCommit(commitUser);
+        long sequenceNumber1 =
+                ((TableWriteImpl<KeyValue>) write).writeAndReturnData(row1).sequenceNumber();
+        Thread.sleep(1);
+        long sequenceNumber2 =
+                ((TableWriteImpl<KeyValue>) write).writeAndReturnData(row2).sequenceNumber();
+        assertEquals(1685530987, TimeUnit.SECONDS.convert(sequenceNumber1, TimeUnit.MICROSECONDS));
+        assertEquals(1685530987, TimeUnit.SECONDS.convert(sequenceNumber2, TimeUnit.MICROSECONDS));
+        commit.commit(0, write.prepareCommit(true, 0));
+        write.close();
+
+        String expectedResult = "1|10|101|1685530987|a2";
+        TableRead read = table.newRead();
+        Function<InternalRow, String> toStringFunc =
+                rowData ->
+                        rowData.getInt(0)
+                                + "|"
+                                + rowData.getInt(1)
+                                + "|"
+                                + rowData.getInt(2)
+                                + "|"
+                                + rowData.getInt(3)
+                                + "|"
+                                + rowData.getString(4);
+        assertThat(getResult(read, table.newScan().plan().splits(), toStringFunc))
+                .isEqualTo(Collections.singletonList(expectedResult));
     }
 
     @Test
