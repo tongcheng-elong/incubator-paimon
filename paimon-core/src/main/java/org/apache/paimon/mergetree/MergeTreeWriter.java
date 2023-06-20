@@ -190,7 +190,7 @@ public class MergeTreeWriter implements RecordWriter<KeyValue>, MemoryOwner {
     private void flushWriteBuffer(boolean waitForLatestCompaction, boolean forcedFullCompaction)
             throws Exception {
         if (writeBuffer.size() > 0) {
-            if (compactManager.shouldWaitCompaction()) {
+            if (compactManager.shouldWaitForLatestCompaction()) {
                 waitForLatestCompaction = true;
             }
 
@@ -233,7 +233,10 @@ public class MergeTreeWriter implements RecordWriter<KeyValue>, MemoryOwner {
     @Override
     public CommitIncrement prepareCommit(boolean waitCompaction) throws Exception {
         flushWriteBuffer(waitCompaction, false);
-        trySyncLatestCompaction(waitCompaction || commitForceCompact);
+        trySyncLatestCompaction(
+                waitCompaction
+                        || commitForceCompact
+                        || compactManager.shouldWaitForPreparingCheckpoint());
         return drainIncrement();
     }
 
