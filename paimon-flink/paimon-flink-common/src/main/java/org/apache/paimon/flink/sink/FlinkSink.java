@@ -176,12 +176,6 @@ public abstract class FlinkSink<T> implements Serializable {
         if (streamingCheckpointEnabled) {
             assertCheckpointConfiguration(env);
         }
-
-        if(!isStreaming && table.options().get(FlinkConnectorOptions.SINK_PARALLELISM.key()) == null && conf.get(BatchExecutionOptions.ADAPTIVE_AUTO_PARALLELISM_ENABLED)){
-            written.setParallelism(conf.get(CoreOptions.DEFAULT_PARALLELISM));
-        }else {
-            written.setParallelism(input.getParallelism());
-        }
         SingleOutputStreamOperator<?> committed =
                 written.transform(
                                 GLOBAL_COMMITTER_NAME + " -> " + table.name(),
