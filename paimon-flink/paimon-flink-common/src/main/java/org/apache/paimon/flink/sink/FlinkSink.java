@@ -139,10 +139,18 @@ public abstract class FlinkSink<T> implements Serializable {
 
     public SingleOutputStreamOperator<Committable> doWrite(
             DataStream<T> input, String commitUser, Integer parallelism) {
-        boolean isStreaming =
-                StreamExecutionEnvironmentUtils.getConfiguration(input.getExecutionEnvironment())
-                                .get(ExecutionOptions.RUNTIME_MODE)
-                        == RuntimeExecutionMode.STREAMING;
+        StreamExecutionEnvironment env = input.getExecutionEnvironment();
+        ReadableConfig conf = StreamExecutionEnvironmentUtils.getConfiguration(env);
+
+        boolean isStreaming = conf.get(ExecutionOptions.RUNTIME_MODE) == RuntimeExecutionMode.STREAMING;
+
+        parallelism = parallelism == null ? input.getParallelism() : parallelism;
+        if(!isStreaming &&
+                org.apache.paimon.CoreOptions.fromMap(table.options()).writeManifestCache().getBytes() > 0
+        ) {
+            System.out.printf("reset parallelism cause of writeManifestCache");
+            parallelism = conf.get(CoreOptions.DEFAULT_PARALLELISM);
+        }
 
         SingleOutputStreamOperator<Committable> written =
                 input.transform(
@@ -154,7 +162,7 @@ public abstract class FlinkSink<T> implements Serializable {
                                                         .getCheckpointConfig()),
                                         isStreaming,
                                         commitUser))
-                        .setParallelism(parallelism == null ? input.getParallelism() : parallelism);
+                        .setParallelism(parallelism);
         Options options = Options.fromMap(table.options());
         if (options.get(SINK_USE_MANAGED_MEMORY)) {
             MemorySize memorySize = options.get(SINK_MANAGED_WRITER_BUFFER_MEMORY);
