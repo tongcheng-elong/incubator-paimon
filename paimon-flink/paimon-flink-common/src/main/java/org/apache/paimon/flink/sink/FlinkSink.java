@@ -141,15 +141,19 @@ public abstract class FlinkSink<T> implements Serializable {
             DataStream<T> input, String commitUser, Integer parallelism) {
         StreamExecutionEnvironment env = input.getExecutionEnvironment();
         ReadableConfig conf = StreamExecutionEnvironmentUtils.getConfiguration(env);
+        System.out.printf("sink param:"+parallelism+",input param:"+input.getParallelism()+",default:"+conf.get(CoreOptions.DEFAULT_PARALLELISM));
 
         boolean isStreaming = conf.get(ExecutionOptions.RUNTIME_MODE) == RuntimeExecutionMode.STREAMING;
 
-        parallelism = parallelism == null ? input.getParallelism() : parallelism;
-        if(!isStreaming &&
-                org.apache.paimon.CoreOptions.fromMap(table.options()).writeManifestCache().getBytes() > 0
-        ) {
-            System.out.printf("reset parallelism cause of writeManifestCache");
-            parallelism = conf.get(CoreOptions.DEFAULT_PARALLELISM);
+        // partitioner parallelism
+        Integer calParallelism = input.getParallelism();
+        if (table.options().get(FlinkConnectorOptions.SINK_PARALLELISM.key()) == null) {
+            // batch and with writeManifestCache
+            if (!isStreaming &&
+                    org.apache.paimon.CoreOptions.fromMap(table.options()).writeManifestCache().getBytes() > 0) {
+                System.out.printf("reset parallelism cause of writeManifestCache");
+                calParallelism = conf.get(CoreOptions.DEFAULT_PARALLELISM);
+            }
         }
 
         SingleOutputStreamOperator<Committable> written =
@@ -162,7 +166,7 @@ public abstract class FlinkSink<T> implements Serializable {
                                                         .getCheckpointConfig()),
                                         isStreaming,
                                         commitUser))
-                        .setParallelism(parallelism);
+                        .setParallelism(calParallelism);
         Options options = Options.fromMap(table.options());
         if (options.get(SINK_USE_MANAGED_MEMORY)) {
             MemorySize memorySize = options.get(SINK_MANAGED_WRITER_BUFFER_MEMORY);

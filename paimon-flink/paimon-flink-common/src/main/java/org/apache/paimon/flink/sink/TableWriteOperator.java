@@ -62,6 +62,7 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
 
         boolean containLogSystem = containLogSystem();
         int numTasks = getRuntimeContext().getNumberOfParallelSubtasks();
+        System.out.printf("write operator numTasks:" + numTasks);
         StateValueFilter stateFilter =
                 (tableName, partition, bucket) -> {
                     int task =
