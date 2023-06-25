@@ -149,8 +149,7 @@ public abstract class FlinkSink<T> implements Serializable {
         Integer calParallelism = input.getParallelism();
         if (table.options().get(FlinkConnectorOptions.SINK_PARALLELISM.key()) == null) {
             // batch and with writeManifestCache
-            if (!isStreaming &&
-                    org.apache.paimon.CoreOptions.fromMap(table.options()).writeManifestCache().getBytes() > 0) {
+            if (!isStreaming && table.coreOptions().writeManifestCache().getMebiBytes() > 0) {
                 System.out.printf("reset parallelism cause of writeManifestCache");
                 calParallelism = conf.get(CoreOptions.DEFAULT_PARALLELISM);
             }

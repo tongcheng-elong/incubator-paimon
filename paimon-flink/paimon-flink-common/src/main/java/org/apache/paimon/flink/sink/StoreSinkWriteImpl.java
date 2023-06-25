@@ -74,8 +74,11 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
     private TableWriteImpl<?> newTableWrite(FileStoreTable table) {
         return table.newWrite(
                         commitUser,
+                        // with manifestCache use filter
+                        table.coreOptions().writeManifestCache().getMebiBytes() > 0 ?
                         (part, bucket) ->
-                                state.stateValueFilter().filter(table.name(), part, bucket))
+                                state.stateValueFilter().filter(table.name(), part, bucket) :
+                        null)
                 .withIOManager(new IOManagerImpl(ioManager.getSpillingDirectoriesPaths()))
                 .withMemoryPool(
                         memoryPool != null
