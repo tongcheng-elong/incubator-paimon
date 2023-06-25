@@ -69,7 +69,8 @@ public abstract class FlinkSink<T> implements Serializable {
         this.ignorePreviousFiles = ignorePreviousFiles;
     }
 
-    private StoreSinkWrite.Provider createWriteProvider(CheckpointConfig checkpointConfig) {
+    private StoreSinkWrite.Provider createWriteProvider(
+            CheckpointConfig checkpointConfig, boolean isStreaming) {
         boolean waitCompaction;
         if (table.coreOptions().writeOnly()) {
             waitCompaction = false;
@@ -103,6 +104,7 @@ public abstract class FlinkSink<T> implements Serializable {
                                 ignorePreviousFiles,
                                 waitCompaction,
                                 finalDeltaCommits,
+                                isStreaming,
                                 memoryPool);
             }
         }
@@ -115,6 +117,7 @@ public abstract class FlinkSink<T> implements Serializable {
                         ioManager,
                         ignorePreviousFiles,
                         waitCompaction,
+                        isStreaming,
                         memoryPool);
     }
 
@@ -162,8 +165,8 @@ public abstract class FlinkSink<T> implements Serializable {
                                 createWriteOperator(
                                         createWriteProvider(
                                                 input.getExecutionEnvironment()
-                                                        .getCheckpointConfig()),
-                                        isStreaming,
+                                                        .getCheckpointConfig(),
+                                                isStreaming),
                                         commitUser))
                         .setParallelism(calParallelism);
         Options options = Options.fromMap(table.options());
@@ -215,7 +218,7 @@ public abstract class FlinkSink<T> implements Serializable {
     }
 
     protected abstract OneInputStreamOperator<T, Committable> createWriteOperator(
-            StoreSinkWrite.Provider writeProvider, boolean isStreaming, String commitUser);
+            StoreSinkWrite.Provider writeProvider, String commitUser);
 
     protected abstract SerializableFunction<String, Committer<Committable, ManifestCommittable>>
             createCommitterFactory(boolean streamingCheckpointEnabled);

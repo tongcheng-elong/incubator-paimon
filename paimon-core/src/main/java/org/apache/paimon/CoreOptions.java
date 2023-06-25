@@ -22,7 +22,7 @@ import org.apache.paimon.annotation.Documentation.ExcludeFromDocumentation;
 import org.apache.paimon.annotation.Documentation.Immutable;
 import org.apache.paimon.annotation.VisibleForTesting;
 import org.apache.paimon.format.FileFormat;
-import org.apache.paimon.format.FileFormatFactory.FormatContext;
+import org.apache.paimon.format.FileFormatDiscover;
 import org.apache.paimon.fs.Path;
 import org.apache.paimon.options.ConfigOption;
 import org.apache.paimon.options.MemorySize;
@@ -199,6 +199,20 @@ public class CoreOptions implements Serializable {
                     .defaultValue(SortEngine.LOSER_TREE)
                     .withDescription("Specify the sort engine for table with primary key.");
 
+    public static final ConfigOption<Integer> SORT_SPILL_THRESHOLD =
+            key("sort-spill-threshold")
+                    .intType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "If the maximum number of sort readers exceeds this value, a spill will be attempted. "
+                                    + "This prevents too many readers from consuming too much memory and causing OOM.");
+
+    public static final ConfigOption<MemorySize> SORT_SPILL_BUFFER_SIZE =
+            key("sort-spill-buffer-size")
+                    .memoryType()
+                    .defaultValue(MemorySize.parse("64 mb"))
+                    .withDescription("Amount of data to spill records to disk in spilled sort.");
+
     @Immutable
     public static final ConfigOption<WriteMode> WRITE_MODE =
             key("write-mode")
@@ -337,15 +351,6 @@ public class CoreOptions implements Serializable {
                                     + "for append-only table, even if sum(size(f_i)) < targetFileSize. This value "
                                     + "avoids pending too much small files, which slows down the performance.");
 
-    public static final ConfigOption<Integer> COMPACTION_MAX_SORTED_RUN_NUM =
-            key("compaction.max-sorted-run-num")
-                    .intType()
-                    .defaultValue(Integer.MAX_VALUE)
-                    .withDescription(
-                            "The maximum sorted run number to pick for compaction. "
-                                    + "This value avoids merging too much sorted runs at the same time during compaction, "
-                                    + "which may lead to OutOfMemoryError.");
-
     public static final ConfigOption<ChangelogProducer> CHANGELOG_PRODUCER =
             key("changelog-producer")
                     .enumType(ChangelogProducer.class)
@@ -400,6 +405,12 @@ public class CoreOptions implements Serializable {
                     .noDefaultValue()
                     .withDescription(
                             "Optional snapshot id used in case of \"from-snapshot\" or \"from-snapshot-full\" scan mode");
+
+    public static final ConfigOption<String> SCAN_TAG_NAME =
+            key("scan.tag-name")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("Optional tag name used in case of \"from-tag\" scan mode.");
 
     public static final ConfigOption<Long> SCAN_BOUNDED_WATERMARK =
             key("scan.bounded.watermark")
@@ -741,11 +752,8 @@ public class CoreOptions implements Serializable {
 
     public static FileFormat createFileFormat(
             Options options, ConfigOption<FileFormatType> formatOption) {
-        FileFormatType formatIdentifier = options.get(formatOption);
-        int readBatchSize = options.get(READ_BATCH_SIZE);
-        return FileFormat.fromIdentifier(
-                formatIdentifier.toString(),
-                new FormatContext(options.removePrefix(formatIdentifier + "."), readBatchSize));
+        String formatIdentifier = options.get(formatOption).toString();
+        return FileFormatDiscover.getFileFormat(options, formatIdentifier);
     }
 
     public Map<Integer, String> fileCompressionPerLevel() {
@@ -782,6 +790,15 @@ public class CoreOptions implements Serializable {
         return options.get(SORT_ENGINE);
     }
 
+    public int sortSpillThreshold() {
+        Integer maxSortedRunNum = options.get(SORT_SPILL_THRESHOLD);
+        if (maxSortedRunNum == null) {
+            int stopNum = numSortedRunStopTrigger();
+            maxSortedRunNum = Math.max(stopNum, stopNum + 1);
+        }
+        return maxSortedRunNum;
+    }
+
     public long splitTargetSize() {
         return options.get(SOURCE_SPLIT_TARGET_SIZE).getBytes();
     }
@@ -794,8 +811,13 @@ public class CoreOptions implements Serializable {
         return options.get(WRITE_BUFFER_SIZE).getBytes();
     }
 
-    public boolean writeBufferSpillable(boolean usingObjectStore) {
-        return options.getOptional(WRITE_BUFFER_SPILLABLE).orElse(usingObjectStore);
+    public boolean writeBufferSpillable(boolean usingObjectStore, boolean isStreaming) {
+        // if not streaming mode, we turn spillable on by default.
+        return options.getOptional(WRITE_BUFFER_SPILLABLE).orElse(usingObjectStore || !isStreaming);
+    }
+
+    public long sortSpillBufferSize() {
+        return options.get(SORT_SPILL_BUFFER_SIZE).getBytes();
     }
 
     public Duration continuousDiscoveryInterval() {
@@ -830,11 +852,7 @@ public class CoreOptions implements Serializable {
         // By default, this ensures that the compaction does not fall to level 0, but at least to
         // level 1
         Integer numLevels = options.get(NUM_LEVELS);
-        int expectedRuns =
-                maxSortedRunNum() == Integer.MAX_VALUE
-                        ? numSortedRunCompactionTrigger()
-                        : numSortedRunStopTrigger();
-        numLevels = numLevels == null ? expectedRuns + 1 : numLevels;
+        numLevels = numLevels == null ? numSortedRunCompactionTrigger() + 1 : numLevels;
         return numLevels;
     }
 
@@ -856,10 +874,6 @@ public class CoreOptions implements Serializable {
 
     public int compactionMaxFileNum() {
         return options.get(COMPACTION_MAX_FILE_NUM);
-    }
-
-    public int maxSortedRunNum() {
-        return options.get(COMPACTION_MAX_SORTED_RUN_NUM);
     }
 
     public long dynamicBucketTargetRowNum() {
@@ -887,7 +901,8 @@ public class CoreOptions implements Serializable {
         if (mode == StartupMode.DEFAULT) {
             if (options.getOptional(SCAN_TIMESTAMP_MILLIS).isPresent()) {
                 return StartupMode.FROM_TIMESTAMP;
-            } else if (options.getOptional(SCAN_SNAPSHOT_ID).isPresent()) {
+            } else if (options.getOptional(SCAN_SNAPSHOT_ID).isPresent()
+                    || options.getOptional(SCAN_TAG_NAME).isPresent()) {
                 return StartupMode.FROM_SNAPSHOT;
             } else {
                 return StartupMode.LATEST_FULL;
@@ -909,6 +924,10 @@ public class CoreOptions implements Serializable {
 
     public Long scanSnapshotId() {
         return options.get(SCAN_SNAPSHOT_ID);
+    }
+
+    public String scanTagName() {
+        return options.get(SCAN_TAG_NAME);
     }
 
     public Integer scanManifestParallelism() {
@@ -1008,7 +1027,7 @@ public class CoreOptions implements Serializable {
                 "default",
                 "Determines actual startup mode according to other table properties. "
                         + "If \"scan.timestamp-millis\" is set the actual startup mode will be \"from-timestamp\", "
-                        + "and if \"scan.snapshot-id\" is set the actual startup mode will be \"from-snapshot\". "
+                        + "and if \"scan.snapshot-id\" or \"scan.tag-name\" is set the actual startup mode will be \"from-snapshot\". "
                         + "Otherwise the actual startup mode will be \"latest-full\"."),
 
         LATEST_FULL(
@@ -1043,10 +1062,10 @@ public class CoreOptions implements Serializable {
 
         FROM_SNAPSHOT(
                 "from-snapshot",
-                "For streaming sources, continuously reads changes "
-                        + "starting from snapshot specified by \"scan.snapshot-id\", "
-                        + "without producing a snapshot at the beginning. For batch sources, "
-                        + "produces a snapshot specified by \"scan.snapshot-id\" but does not read new changes."),
+                "For streaming sources, continuously reads changes starting from snapshot "
+                        + "specified by \"scan.snapshot-id\", without producing a snapshot at the beginning. "
+                        + "For batch sources, produces a snapshot specified by \"scan.snapshot-id\" "
+                        + "or \"scan.tag-name\" but does not read new changes."),
 
         FROM_SNAPSHOT_FULL(
                 "from-snapshot-full",

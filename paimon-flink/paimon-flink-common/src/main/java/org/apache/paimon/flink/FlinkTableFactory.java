@@ -19,8 +19,6 @@
 package org.apache.paimon.flink;
 
 import org.apache.paimon.CoreOptions;
-import org.apache.paimon.catalog.CatalogLock;
-import org.apache.paimon.flink.sink.FlinkTableSink;
 import org.apache.paimon.fs.FileIO;
 import org.apache.paimon.fs.Path;
 import org.apache.paimon.options.Options;
@@ -34,8 +32,6 @@ import org.apache.flink.table.factories.FactoryUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-
 import static org.apache.paimon.CoreOptions.AUTO_CREATE;
 import static org.apache.paimon.flink.FlinkCatalogFactory.IDENTIFIER;
 
@@ -43,18 +39,6 @@ import static org.apache.paimon.flink.FlinkCatalogFactory.IDENTIFIER;
 public class FlinkTableFactory extends AbstractFlinkTableFactory {
 
     protected static final Logger LOG = LoggerFactory.getLogger(FlinkTableFactory.class);
-
-
-    @Nullable private final CatalogLock.Factory lockFactory;
-
-    public FlinkTableFactory() {
-        this(null);
-    }
-
-    public FlinkTableFactory(@Nullable CatalogLock.Factory lockFactory) {
-        this.lockFactory = lockFactory;
-    }
-
     @Override
     public String factoryIdentifier() {
         return IDENTIFIER;
@@ -91,9 +75,7 @@ public class FlinkTableFactory extends AbstractFlinkTableFactory {
         }
         createTableIfNeeded(context);
         LOG.info("table:{} with options:{}",context.getObjectIdentifier(),context.getCatalogTable().getOptions());
-        FlinkTableSink sink = (FlinkTableSink) super.createDynamicTableSink(context);
-        sink.setLockFactory(lockFactory);
-        return sink;
+        return super.createDynamicTableSink(context);
     }
 
     private void createTableIfNeeded(Context context) {

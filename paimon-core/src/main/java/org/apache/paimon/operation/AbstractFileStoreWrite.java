@@ -71,6 +71,7 @@ public abstract class AbstractFileStoreWrite<T>
 
     private ExecutorService lazyCompactExecutor;
     private boolean ignorePreviousFiles = false;
+    protected boolean isStreamingMode = false;
 
     protected AbstractFileStoreWrite(
             String commitUser,
@@ -331,6 +332,11 @@ public abstract class AbstractFileStoreWrite<T>
                 bucket,
                 System.currentTimeMillis() - startTs);
         return new WriterContainer<>(writer, indexMaintainer, latestSnapshotId);
+    }
+
+    @Override
+    public void isStreamingMode(boolean isStreamingMode) {
+        this.isStreamingMode = isStreamingMode;
     }
 
     private List<DataFileMeta> scanExistingFileMetas(
