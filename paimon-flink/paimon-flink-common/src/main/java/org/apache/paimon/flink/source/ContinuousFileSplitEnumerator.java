@@ -103,7 +103,7 @@ public class ContinuousFileSplitEnumerator
     }
 
     private void addSplit(FileStoreSourceSplit split) {
-        splitAssigner.addSplit(assignTask(((DataSplit) split.split())), split);
+        splitAssigner.addSplit(PreAssignSplitAssigner.assignTask(((DataSplit) split.split()),context.currentParallelism()), split);
     }
 
     @Override
@@ -206,19 +206,5 @@ public class ContinuousFileSplitEnumerator
                     }
                 });
         return assignment;
-    }
-
-    private int assignTask(DataSplit dataSplit) {
-        if (bucketMode == BucketMode.UNAWARE) {
-            // we just assign task 0 when bucket unaware
-            return 0;
-        } else {
-            // if not bucket unaware, we assign the (partition + bucket) % parallelism,
-            // We should assign tasks of the same partition and the same bucket to the same task,
-            // and randomly assign different partitions to different tasks to make full use of parallel resources
-            BinaryRow partition = dataSplit.partition();
-            int bucket = dataSplit.bucket();
-            return ChannelComputer.select(partition,bucket,context.currentParallelism());
-        }
     }
 }

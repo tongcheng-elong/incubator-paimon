@@ -18,7 +18,10 @@
 
 package org.apache.paimon.flink.source.assigners;
 
+import org.apache.paimon.data.BinaryRow;
+import org.apache.paimon.flink.sink.ChannelComputer;
 import org.apache.paimon.flink.source.FileStoreSourceSplit;
+import org.apache.paimon.table.source.DataSplit;
 import org.apache.paimon.utils.BinPacking;
 
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
@@ -42,7 +45,6 @@ public class PreAssignSplitAssigner implements SplitAssigner {
 
     /** Default batch splits size to avoid exceed `akka.framesize`. */
     private final int splitBatchSize;
-
     private final Map<Integer, LinkedList<FileStoreSourceSplit>> pendingSplitAssignment;
 
     public PreAssignSplitAssigner(
@@ -50,8 +52,7 @@ public class PreAssignSplitAssigner implements SplitAssigner {
             SplitEnumeratorContext<FileStoreSourceSplit> context,
             Collection<FileStoreSourceSplit> splits) {
         this.splitBatchSize = splitBatchSize;
-        this.pendingSplitAssignment =
-                createBatchFairSplitAssignment(splits, context.currentParallelism());
+        this.pendingSplitAssignment = createBatchFairSplitAssignment(splits, context.currentParallelism());
     }
 
     @Override
@@ -103,5 +104,14 @@ public class PreAssignSplitAssigner implements SplitAssigner {
             assignment.put(i, new LinkedList<>(assignmentList.get(i)));
         }
         return assignment;
+    }
+
+    public static int assignTask(DataSplit dataSplit,int parallelism) {
+        // we assign the (partition + bucket) % parallelism,
+        // We should assign tasks of the same partition and the same bucket to the same task,
+        // and randomly assign different partitions to different tasks to make full use of parallel resources
+        BinaryRow partition = dataSplit.partition();
+        int bucket = dataSplit.bucket();
+        return ChannelComputer.select(partition, bucket, parallelism);
     }
 }

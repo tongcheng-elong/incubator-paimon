@@ -18,6 +18,8 @@
 
 package org.apache.paimon.flink.source.operator;
 
+import org.apache.flink.api.common.functions.Partitioner;
+import org.apache.paimon.flink.source.assigners.PreAssignSplitAssigner;
 import org.apache.paimon.flink.utils.JavaTypeInfo;
 import org.apache.paimon.table.source.DataSplit;
 import org.apache.paimon.table.source.EndOfScanException;
@@ -109,8 +111,7 @@ public class MonitorFunction extends RichSourceFunction<Split>
                                 new ListStateDescriptor<>(
                                         "next-snapshot", LongSerializer.INSTANCE));
 
-        @SuppressWarnings("unchecked")
-        final Class<Tuple2<Long, Long>> typedTuple =
+        @SuppressWarnings("unchecked") final Class<Tuple2<Long, Long>> typedTuple =
                 (Class<Tuple2<Long, Long>>) (Class<?>) Tuple2.class;
         this.nextSnapshotState =
                 context.getOperatorStateStore()
@@ -119,8 +120,8 @@ public class MonitorFunction extends RichSourceFunction<Split>
                                         "next-snapshot-per-checkpoint",
                                         new TupleSerializer<>(
                                                 typedTuple,
-                                                new TypeSerializer[] {
-                                                    LongSerializer.INSTANCE, LongSerializer.INSTANCE
+                                                new TypeSerializer[]{
+                                                        LongSerializer.INSTANCE, LongSerializer.INSTANCE
                                                 })));
 
         this.nextSnapshotPerCheckpoint = new TreeMap<>();
@@ -235,9 +236,9 @@ public class MonitorFunction extends RichSourceFunction<Split>
                         name + "-Monitor",
                         new JavaTypeInfo<>(Split.class))
                 .forceNonParallel()
-                .partitionCustom(
-                        (key, numPartitions) -> key % numPartitions,
-                        split -> ((DataSplit) split).bucket())
+                .partitionCustom((Partitioner<Split>) (split, numPartitions) -> PreAssignSplitAssigner.assignTask(((DataSplit) split), numPartitions), split -> split)
                 .transform(name + "-Reader", typeInfo, new ReadOperator(readBuilder));
     }
+
+
 }
