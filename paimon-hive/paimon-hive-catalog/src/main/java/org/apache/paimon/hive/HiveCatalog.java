@@ -306,7 +306,7 @@ public class HiveCatalog extends AbstractCatalog {
                     e);
         }
         Table table = newHmsTable(identifier);
-        updateHmsTable(table, identifier, tableSchema);
+        updateHmsTable(table, identifier, tableSchema, true);
         try {
             client.createTable(table);
         } catch (TException e) {
@@ -374,7 +374,7 @@ public class HiveCatalog extends AbstractCatalog {
                 // sync to hive hms
                 Table table =
                         client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
-                updateHmsTable(table, identifier, schema);
+                updateHmsTable(table, identifier, schema, false);
                 client.alter_table(identifier.getDatabaseName(), identifier.getObjectName(), table);
             } catch (TException te) {
                 schemaManager.deleteSchema(schema.id());
@@ -477,12 +477,14 @@ public class HiveCatalog extends AbstractCatalog {
         return table;
     }
 
-    private void updateHmsTable(Table table, Identifier identifier, TableSchema schema) {
+    private void updateHmsTable(Table table, Identifier identifier, TableSchema schema, boolean updateLocation) {
         StorageDescriptor sd = convertToStorageDescriptor(schema);
         table.setSd(sd);
 
-        // update location
-        locationHelper.specifyTableLocation(table, super.getDataTableLocation(identifier).toString());
+        if (updateLocation) {
+            // update location
+            locationHelper.specifyTableLocation(table, super.getDataTableLocation(identifier).toString());
+        }
     }
 
     private StorageDescriptor convertToStorageDescriptor(TableSchema schema) {
