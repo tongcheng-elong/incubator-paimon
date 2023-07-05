@@ -233,6 +233,7 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
     public TableCommitImpl newCommit(String commitUser) {
         return new TableCommitImpl(
                 store().newCommit(commitUser),
+                coreOptions().commitCallbacks(),
                 coreOptions().writeOnly() ? null : store().newExpire(),
                 coreOptions().writeOnly() ? null : store().newPartitionExpire(commitUser),
                 lockFactory.create(),
