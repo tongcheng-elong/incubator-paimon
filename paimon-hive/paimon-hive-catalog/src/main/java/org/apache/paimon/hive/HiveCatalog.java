@@ -365,6 +365,7 @@ public class HiveCatalog extends AbstractCatalog {
 
         checkFieldNamesUpperCaseInSchemaChange(changes);
         try {
+            checkIdentifierUpperCase(identifier);
             final SchemaManager schemaManager = new SchemaManager(fileIO, getDataTableLocation(identifier))
                     .withLock(lock(identifier));
             // first commit changes to underlying files
@@ -374,14 +375,6 @@ public class HiveCatalog extends AbstractCatalog {
                 // sync to hive hms
                 Table table =
                         client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
-                if (!table.getDbName().equals(identifier.getDatabaseName()) ||
-                        !table.getTableName().equals(identifier.getObjectName())) {
-                    throw new IllegalArgumentException(String.format(
-                            "Hive meta table was %s ,but alter use %s should keep same",
-                            table.getDbName() + "." + table.getTableName(),
-                            identifier.getDatabaseName() + "." + identifier.getObjectName()
-                    ));
-                }
                 updateHmsTable(table, identifier, schema);
                 client.alter_table(identifier.getDatabaseName(), identifier.getObjectName(), table);
             } catch (TException te) {
