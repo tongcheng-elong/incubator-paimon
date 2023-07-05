@@ -306,7 +306,7 @@ public class HiveCatalog extends AbstractCatalog {
                     e);
         }
         Table table = newHmsTable(identifier);
-        updateHmsTable(table, identifier, tableSchema, false);
+        updateHmsTable(table, identifier, tableSchema);
         try {
             client.createTable(table);
         } catch (TException e) {
@@ -374,7 +374,15 @@ public class HiveCatalog extends AbstractCatalog {
                 // sync to hive hms
                 Table table =
                         client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
-                updateHmsTable(table, identifier, schema, true);
+                if (!table.getDbName().equals(identifier.getDatabaseName()) ||
+                        !table.getTableName().equals(identifier.getObjectName())) {
+                    throw new IllegalArgumentException(String.format(
+                            "Hive meta table was %s ,but alter use %s should keep same",
+                            table.getDbName() + "." + table.getTableName(),
+                            identifier.getDatabaseName() + "." + identifier.getObjectName()
+                    ));
+                }
+                updateHmsTable(table, identifier, schema);
                 client.alter_table(identifier.getDatabaseName(), identifier.getObjectName(), table);
             } catch (TException te) {
                 schemaManager.deleteSchema(schema.id());
@@ -477,17 +485,12 @@ public class HiveCatalog extends AbstractCatalog {
         return table;
     }
 
-    private void updateHmsTable(Table table, Identifier identifier, TableSchema schema, boolean alterTable) {
+    private void updateHmsTable(Table table, Identifier identifier, TableSchema schema) {
         StorageDescriptor sd = convertToStorageDescriptor(schema);
         table.setSd(sd);
 
-        // update location, to update meta last time
-        String tableLocation = super.getDataTableLocation(identifier).toString();
-        if (alterTable) {
-            // not change the location when alter table which means table exists
-            tableLocation = getDataTableLocation(identifier).toString();
-        }
-        locationHelper.specifyTableLocation(table, tableLocation);
+        // update location
+        locationHelper.specifyTableLocation(table, super.getDataTableLocation(identifier).toString());
     }
 
     private StorageDescriptor convertToStorageDescriptor(TableSchema schema) {
