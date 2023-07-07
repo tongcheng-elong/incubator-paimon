@@ -163,10 +163,7 @@ public abstract class FlinkSink<T> implements Serializable {
                                 WRITER_NAME + " -> " + table.name(),
                                 new CommittableTypeInfo(),
                                 createWriteOperator(
-                                        createWriteProvider(
-                                                input.getExecutionEnvironment()
-                                                        .getCheckpointConfig()),
-                                        isStreaming,
+                                        createWriteProvider(env.getCheckpointConfig(), isStreaming),
                                         commitUser))
                         .setParallelism(calParallelism);
         Options options = Options.fromMap(table.options());

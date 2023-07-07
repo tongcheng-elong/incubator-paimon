@@ -55,11 +55,6 @@ public class TableWriteImpl<T>
         this.keyAndBucketExtractor = keyAndBucketExtractor;
         this.recordExtractor = recordExtractor;
     }
-
-    public AbstractFileStoreWrite<T> getWrite() {
-        return write;
-    }
-
     @Override
     public TableWriteImpl<T> withIgnorePreviousFiles(boolean ignorePreviousFiles) {
         write.withIgnorePreviousFiles(ignorePreviousFiles);
