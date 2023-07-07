@@ -26,10 +26,13 @@ import org.apache.paimon.table.Table;
 import javax.annotation.Nullable;
 
 import static org.apache.paimon.table.system.AuditLogTable.AUDIT_LOG;
+import static org.apache.paimon.table.system.ConsumersTable.CONSUMERS;
 import static org.apache.paimon.table.system.FilesTable.FILES;
+import static org.apache.paimon.table.system.ManifestsTable.MANIFESTS;
 import static org.apache.paimon.table.system.OptionsTable.OPTIONS;
 import static org.apache.paimon.table.system.SchemasTable.SCHEMAS;
 import static org.apache.paimon.table.system.SnapshotsTable.SNAPSHOTS;
+import static org.apache.paimon.table.system.TagsTable.TAGS;
 
 /** Loader to load system {@link Table}s. */
 public class SystemTableLoader {
@@ -38,6 +41,8 @@ public class SystemTableLoader {
     public static Table load(String type, FileIO fileIO, FileStoreTable dataTable) {
         Path location = dataTable.location();
         switch (type.toLowerCase()) {
+            case MANIFESTS:
+                return new ManifestsTable(fileIO, location, dataTable);
             case SNAPSHOTS:
                 return new SnapshotsTable(fileIO, location);
             case OPTIONS:
@@ -48,6 +53,10 @@ public class SystemTableLoader {
                 return new AuditLogTable(dataTable);
             case FILES:
                 return new FilesTable(dataTable);
+            case TAGS:
+                return new TagsTable(fileIO, location);
+            case CONSUMERS:
+                return new ConsumersTable(fileIO, location);
             default:
                 return null;
         }

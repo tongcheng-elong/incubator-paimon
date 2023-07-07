@@ -100,7 +100,7 @@ public class HiveCatalog extends AbstractCatalog {
     private final IMetaStoreClient client;
     private final String warehouse;
 
-    private LocationHelper locationHelper;
+    private final LocationHelper locationHelper;
 
     public HiveCatalog(FileIO fileIO, HiveConf hiveConf, String clientClassName, String warehouse) {
         this(fileIO, hiveConf, clientClassName, Collections.emptyMap(), warehouse);
@@ -353,7 +353,7 @@ public class HiveCatalog extends AbstractCatalog {
     @Override
     public void alterTable(
             Identifier identifier, List<SchemaChange> changes, boolean ignoreIfNotExists)
-            throws TableNotExistException {
+            throws TableNotExistException, ColumnAlreadyExistException, ColumnNotExistException {
         checkNotSystemTable(identifier, "alterTable");
         if (!paimonTableExists(identifier)) {
             if (ignoreIfNotExists) {
@@ -364,25 +364,21 @@ public class HiveCatalog extends AbstractCatalog {
         }
 
         checkFieldNamesUpperCaseInSchemaChange(changes);
-        try {
-            checkIdentifierUpperCase(identifier);
-            final SchemaManager schemaManager = new SchemaManager(fileIO, getDataTableLocation(identifier))
-                    .withLock(lock(identifier));
-            // first commit changes to underlying files
-            TableSchema schema = schemaManager.commitChanges(changes);
 
-            try {
-                // sync to hive hms
-                Table table =
-                        client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
-                updateHmsTable(table, identifier, schema);
-                client.alter_table(identifier.getDatabaseName(), identifier.getObjectName(), table);
-            } catch (TException te) {
-                schemaManager.deleteSchema(schema.id());
-                throw te;
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        checkIdentifierUpperCase(identifier);
+        final SchemaManager schemaManager = new SchemaManager(fileIO, getDataTableLocation(identifier))
+                .withLock(lock(identifier));
+        // first commit changes to underlying files
+        TableSchema schema = schemaManager.commitChanges(changes);
+
+        try {
+            // sync to hive hms
+            Table table = client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
+            updateHmsTable(table, identifier, schema);
+            client.alter_table(identifier.getDatabaseName(), identifier.getObjectName(), table);
+        } catch (TException te) {
+            schemaManager.deleteSchema(schema.id());
+            throw new RuntimeException(te);
         }
     }
 

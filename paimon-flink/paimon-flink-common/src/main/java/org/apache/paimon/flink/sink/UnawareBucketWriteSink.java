@@ -19,7 +19,6 @@
 package org.apache.paimon.flink.sink;
 
 import org.apache.paimon.flink.compact.UnawareBucketCompactionTopoBuilder;
-import org.apache.paimon.operation.Lock;
 import org.apache.paimon.table.AppendOnlyFileStoreTable;
 
 import org.apache.flink.api.common.RuntimeExecutionMode;
@@ -44,11 +43,10 @@ public class UnawareBucketWriteSink extends FileStoreSink {
 
     public UnawareBucketWriteSink(
             AppendOnlyFileStoreTable table,
-            Lock.Factory lock,
             Map<String, String> overwritePartitions,
             LogSinkFunction logSinkFunction,
             Integer parallelism) {
-        super(table, lock, overwritePartitions, logSinkFunction);
+        super(table, overwritePartitions, logSinkFunction);
         this.table = table;
         this.enableCompaction = !table.coreOptions().writeOnly();
         this.parallelism = parallelism;
@@ -59,18 +57,17 @@ public class UnawareBucketWriteSink extends FileStoreSink {
         // do the actually writing action, no snapshot generated in this stage
         DataStream<Committable> written = doWrite(input, initialCommitUser, parallelism);
 
+        boolean isStreamingMode =
+                input.getExecutionEnvironment()
+                                .getConfiguration()
+                                .get(ExecutionOptions.RUNTIME_MODE)
+                        == RuntimeExecutionMode.STREAMING;
         // if enable compaction, we need to add compaction topology to this job
-        if (enableCompaction) {
-            boolean isStreamingMode =
-                    input.getExecutionEnvironment()
-                                    .getConfiguration()
-                                    .get(ExecutionOptions.RUNTIME_MODE)
-                            == RuntimeExecutionMode.STREAMING;
-
+        if (enableCompaction && isStreamingMode) {
             UnawareBucketCompactionTopoBuilder builder =
                     new UnawareBucketCompactionTopoBuilder(
                             input.getExecutionEnvironment(), table.name(), table);
-            builder.withContinuousMode(isStreamingMode);
+            builder.withContinuousMode(true);
             written = written.union(builder.fetchUncommitted(initialCommitUser));
         }
 

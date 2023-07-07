@@ -48,13 +48,18 @@ import java.sql.ResultSet;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+import static org.apache.paimon.flink.action.Action.checkRequiredArgument;
 import static org.apache.paimon.flink.action.Action.optionalConfigMap;
+import static org.apache.paimon.flink.action.cdc.mysql.MySqlDatabaseSyncMode.SEPARATE;
+import static org.apache.paimon.flink.action.cdc.mysql.MySqlDatabaseSyncMode.UNIFIED;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /**
@@ -102,9 +107,11 @@ public class MySqlSyncDatabaseAction extends ActionBase {
     private final boolean ignoreIncompatible;
     private final String tablePrefix;
     private final String tableSuffix;
-    @Nullable private final Pattern includingPattern;
+    private final Pattern includingPattern;
     @Nullable private final Pattern excludingPattern;
     private final Map<String, String> tableConfig;
+    private final String includingTables;
+    private final MySqlDatabaseSyncMode mode;
 
     public MySqlSyncDatabaseAction(
             Map<String, String> mySqlConfig,
@@ -123,7 +130,8 @@ public class MySqlSyncDatabaseAction extends ActionBase {
                 null,
                 null,
                 catalogConfig,
-                tableConfig);
+                tableConfig,
+                SEPARATE);
     }
 
     public MySqlSyncDatabaseAction(
@@ -136,16 +144,19 @@ public class MySqlSyncDatabaseAction extends ActionBase {
             @Nullable String includingTables,
             @Nullable String excludingTables,
             Map<String, String> catalogConfig,
-            Map<String, String> tableConfig) {
+            Map<String, String> tableConfig,
+            MySqlDatabaseSyncMode mode) {
         super(warehouse, catalogConfig);
         this.mySqlConfig = Configuration.fromMap(mySqlConfig);
         this.database = database;
         this.ignoreIncompatible = ignoreIncompatible;
         this.tablePrefix = tablePrefix == null ? "" : tablePrefix;
         this.tableSuffix = tableSuffix == null ? "" : tableSuffix;
-        this.includingPattern = includingTables == null ? null : Pattern.compile(includingTables);
+        this.includingTables = includingTables == null ? ".*" : includingTables;
+        this.includingPattern = Pattern.compile(this.includingTables);
         this.excludingPattern = excludingTables == null ? null : Pattern.compile(excludingTables);
         this.tableConfig = tableConfig;
+        this.mode = mode;
     }
 
     public void build(StreamExecutionEnvironment env) throws Exception {
@@ -161,11 +172,13 @@ public class MySqlSyncDatabaseAction extends ActionBase {
             validateCaseInsensitive();
         }
 
-        List<MySqlSchema> mySqlSchemas = getMySqlSchemaList();
+        List<String> excludedTables = new LinkedList<>();
+        List<MySqlSchema> mySqlSchemas = getMySqlSchemaList(excludedTables);
+        String mySqlDatabase = mySqlConfig.get(MySqlSourceOptions.DATABASE_NAME);
         checkArgument(
                 mySqlSchemas.size() > 0,
                 "No tables found in MySQL database "
-                        + mySqlConfig.get(MySqlSourceOptions.DATABASE_NAME)
+                        + mySqlDatabase
                         + ", or MySQL database does not exist.");
 
         catalog.createDatabase(database, true);
@@ -206,9 +219,21 @@ public class MySqlSyncDatabaseAction extends ActionBase {
                 !monitoredTables.isEmpty(),
                 "No tables to be synchronized. Possible cause is the schemas of all tables in specified "
                         + "MySQL database are not compatible with those of existed Paimon tables. Please check the log.");
+        String tableList;
 
-        mySqlConfig.set(
-                MySqlSourceOptions.TABLE_NAME, "(" + String.join("|", monitoredTables) + ")");
+        if (mode == UNIFIED) {
+            // First excluding all tables that failed the excludingPattern and those does not
+            //     have a primary key. Then including other table using regex so that newly
+            //     added table DDLs and DMLs during job runtime will be captured
+            tableList =
+                    excludedTables.stream()
+                                    .map(t -> String.format("(?!(%s))", t))
+                                    .collect(Collectors.joining(""))
+                            + includingTables;
+        } else {
+            tableList = "(" + String.join("|", monitoredTables) + ")";
+        }
+        mySqlConfig.set(MySqlSourceOptions.TABLE_NAME, tableList);
         MySqlSource<String> source = MySqlActionUtils.buildMySqlSource(mySqlConfig);
 
         String serverTimeZone = mySqlConfig.get(MySqlSourceOptions.SERVER_TIME_ZONE);
@@ -216,17 +241,24 @@ public class MySqlSyncDatabaseAction extends ActionBase {
         EventParser.Factory<String> parserFactory =
                 () -> new MySqlDebeziumJsonEventParser(zoneId, caseSensitive, tableNameConverter);
 
+        String database = this.database;
+        MySqlDatabaseSyncMode mode = this.mode;
         FlinkCdcSyncDatabaseSinkBuilder<String> sinkBuilder =
                 new FlinkCdcSyncDatabaseSinkBuilder<String>()
                         .withInput(
                                 env.fromSource(
                                         source, WatermarkStrategy.noWatermarks(), "MySQL Source"))
                         .withParserFactory(parserFactory)
-                        .withTables(fileStoreTables);
+                        .withDatabase(database)
+                        .withCatalogLoader(catalogLoader())
+                        .withTables(fileStoreTables)
+                        .withMode(mode);
+
         String sinkParallelism = tableConfig.get(FlinkConnectorOptions.SINK_PARALLELISM.key());
         if (sinkParallelism != null) {
             sinkBuilder.withParallelism(Integer.parseInt(sinkParallelism));
         }
+
         sinkBuilder.build();
     }
 
@@ -248,7 +280,7 @@ public class MySqlSyncDatabaseAction extends ActionBase {
                         tableSuffix));
     }
 
-    private List<MySqlSchema> getMySqlSchemaList() throws Exception {
+    private List<MySqlSchema> getMySqlSchemaList(List<String> excludedTables) throws Exception {
         String databaseName = mySqlConfig.get(MySqlSourceOptions.DATABASE_NAME);
         List<MySqlSchema> mySqlSchemaList = new ArrayList<>();
         try (Connection conn = MySqlActionUtils.getConnection(mySqlConfig)) {
@@ -258,12 +290,15 @@ public class MySqlSyncDatabaseAction extends ActionBase {
                 while (tables.next()) {
                     String tableName = tables.getString("TABLE_NAME");
                     if (!shouldMonitorTable(tableName)) {
+                        excludedTables.add(tableName);
                         continue;
                     }
                     MySqlSchema mySqlSchema = new MySqlSchema(metaData, databaseName, tableName);
                     if (mySqlSchema.primaryKeys().size() > 0) {
                         // only tables with primary keys will be considered
                         mySqlSchemaList.add(mySqlSchema);
+                    } else {
+                        excludedTables.add(tableName);
                     }
                 }
             }
@@ -272,10 +307,7 @@ public class MySqlSyncDatabaseAction extends ActionBase {
     }
 
     private boolean shouldMonitorTable(String mySqlTableName) {
-        boolean shouldMonitor = true;
-        if (includingPattern != null) {
-            shouldMonitor = includingPattern.matcher(mySqlTableName).matches();
-        }
+        boolean shouldMonitor = includingPattern.matcher(mySqlTableName).matches();
         if (excludingPattern != null) {
             shouldMonitor = shouldMonitor && !excludingPattern.matcher(mySqlTableName).matches();
         }
@@ -323,6 +355,10 @@ public class MySqlSyncDatabaseAction extends ActionBase {
             return Optional.empty();
         }
 
+        checkRequiredArgument(params, "warehouse");
+        checkRequiredArgument(params, "database");
+        checkRequiredArgument(params, "mysql-conf");
+
         String warehouse = params.get("warehouse");
         String database = params.get("database");
         boolean ignoreIncompatible = Boolean.parseBoolean(params.get("ignore-incompatible"));
@@ -330,9 +366,12 @@ public class MySqlSyncDatabaseAction extends ActionBase {
         String tableSuffix = params.get("table-suffix");
         String includingTables = params.get("including-tables");
         String excludingTables = params.get("excluding-tables");
-
-        if (!params.has("mysql-conf")) {
-            return Optional.empty();
+        String mode = params.get("mode");
+        MySqlDatabaseSyncMode syncMode;
+        if ("unified".equalsIgnoreCase(mode)) {
+            syncMode = UNIFIED;
+        } else {
+            syncMode = SEPARATE;
         }
 
         Map<String, String> mySqlConfig = optionalConfigMap(params, "mysql-conf");
@@ -349,7 +388,8 @@ public class MySqlSyncDatabaseAction extends ActionBase {
                         includingTables,
                         excludingTables,
                         catalogConfig,
-                        tableConfig));
+                        tableConfig,
+                        syncMode));
     }
 
     private static void printHelp() {
@@ -402,7 +442,7 @@ public class MySqlSyncDatabaseAction extends ActionBase {
                 "'hostname', 'username', 'password' and 'database-name' "
                         + "are required configurations, others are optional. "
                         + "Note that 'database-name' should be the exact name "
-                        + "of the MySQL databse you want to synchronize. "
+                        + "of the MySQL database you want to synchronize. "
                         + "It can't be a regular expression.");
         System.out.println(
                 "For a complete list of supported configurations, "

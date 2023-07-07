@@ -193,7 +193,9 @@ public class SchemaManager implements Serializable {
     }
 
     /** Update {@link SchemaChange}s. */
-    public TableSchema commitChanges(List<SchemaChange> changes) throws Exception {
+    public TableSchema commitChanges(List<SchemaChange> changes)
+            throws Catalog.TableNotExistException, Catalog.ColumnAlreadyExistException,
+                    Catalog.ColumnNotExistException {
         while (true) {
             TableSchema schema =
                     latest().orElseThrow(
@@ -378,9 +380,13 @@ public class SchemaManager implements Serializable {
                             newOptions,
                             schema.comment());
 
-            boolean success = commit(newSchema);
-            if (success) {
-                return newSchema;
+            try {
+                boolean success = commit(newSchema);
+                if (success) {
+                    return newSchema;
+                }
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         }
     }

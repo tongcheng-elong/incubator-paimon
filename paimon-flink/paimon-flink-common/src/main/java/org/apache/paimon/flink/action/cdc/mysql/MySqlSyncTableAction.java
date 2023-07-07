@@ -51,6 +51,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.apache.paimon.flink.action.Action.checkRequiredArgument;
 import static org.apache.paimon.flink.action.Action.optionalConfigMap;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
@@ -190,7 +191,9 @@ public class MySqlSyncTableAction extends ActionBase {
                                 env.fromSource(
                                         source, WatermarkStrategy.noWatermarks(), "MySQL Source"))
                         .withParserFactory(parserFactory)
-                        .withTable(table);
+                        .withTable(table)
+                        .withIdentifier(identifier)
+                        .withCatalogLoader(catalogLoader());
         String sinkParallelism = tableConfig.get(FlinkConnectorOptions.SINK_PARALLELISM.key());
         if (sinkParallelism != null) {
             sinkBuilder.withParallelism(Integer.parseInt(sinkParallelism));
@@ -267,9 +270,6 @@ public class MySqlSyncTableAction extends ActionBase {
         }
 
         Tuple3<String, String, String> tablePath = Action.getTablePath(params);
-        if (tablePath == null) {
-            return Optional.empty();
-        }
 
         List<String> partitionKeys = Collections.emptyList();
         if (params.has("partition-keys")) {
@@ -290,9 +290,7 @@ public class MySqlSyncTableAction extends ActionBase {
             computedColumnArgs = new ArrayList<>(params.getMultiParameter("computed-column"));
         }
 
-        if (!params.has("mysql-conf")) {
-            return Optional.empty();
-        }
+        checkRequiredArgument(params, "mysql-conf");
 
         Map<String, String> mySqlConfig = optionalConfigMap(params, "mysql-conf");
         Map<String, String> catalogConfig = optionalConfigMap(params, "catalog-conf");

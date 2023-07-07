@@ -21,6 +21,7 @@ package org.apache.paimon.catalog;
 import org.apache.paimon.annotation.VisibleForTesting;
 import org.apache.paimon.fs.FileIO;
 import org.apache.paimon.fs.Path;
+import org.apache.paimon.operation.Lock;
 import org.apache.paimon.schema.TableSchema;
 import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.table.FileStoreTableFactory;
@@ -80,7 +81,11 @@ public abstract class AbstractCatalog implements Catalog {
 
     private FileStoreTable getDataTable(Identifier identifier) throws TableNotExistException {
         TableSchema tableSchema = getDataTableSchema(identifier);
-        return FileStoreTableFactory.create(fileIO, getDataTableLocation(identifier), tableSchema);
+        return FileStoreTableFactory.create(
+                fileIO,
+                getDataTableLocation(identifier),
+                tableSchema,
+                Lock.factory(lockFactory().orElse(null), identifier));
     }
 
     @VisibleForTesting
@@ -98,7 +103,7 @@ public abstract class AbstractCatalog implements Catalog {
         return dataTableLocation(warehouse(), identifier);
     }
 
-    private boolean isSystemTable(Identifier identifier) {
+    private static boolean isSystemTable(Identifier identifier) {
         return identifier.getObjectName().contains(SYSTEM_TABLE_SPLITTER);
     }
 
@@ -126,7 +131,7 @@ public abstract class AbstractCatalog implements Catalog {
     }
 
     public static Path dataTableLocation(String warehouse, Identifier identifier) {
-        if (identifier.getObjectName().contains(SYSTEM_TABLE_SPLITTER)) {
+        if (isSystemTable(identifier)) {
             throw new IllegalArgumentException(
                     String.format(
                             "Table name[%s] cannot contain '%s' separator",

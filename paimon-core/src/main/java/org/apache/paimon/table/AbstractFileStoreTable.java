@@ -24,7 +24,7 @@ import org.apache.paimon.consumer.ConsumerManager;
 import org.apache.paimon.fs.FileIO;
 import org.apache.paimon.fs.Path;
 import org.apache.paimon.operation.FileStoreScan;
-import org.apache.paimon.operation.TagDeletion;
+import org.apache.paimon.operation.Lock;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.predicate.Predicate;
 import org.apache.paimon.schema.SchemaManager;
@@ -44,7 +44,6 @@ import org.apache.paimon.table.source.snapshot.SnapshotReader;
 import org.apache.paimon.table.source.snapshot.SnapshotReaderImpl;
 import org.apache.paimon.table.source.snapshot.StaticFromTimestampStartingScanner;
 import org.apache.paimon.utils.SnapshotManager;
-import org.apache.paimon.utils.StringUtils;
 import org.apache.paimon.utils.TagManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,8 +68,10 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
     protected final FileIO fileIO;
     protected final Path path;
     protected final TableSchema tableSchema;
+    protected final Lock.Factory lockFactory;
 
-    public AbstractFileStoreTable(FileIO fileIO, Path path, TableSchema tableSchema) {
+    public AbstractFileStoreTable(
+            FileIO fileIO, Path path, TableSchema tableSchema, Lock.Factory lockFactory) {
         this.fileIO = fileIO;
         this.path = path;
         if (!tableSchema.options().containsKey(PATH.key())) {
@@ -80,6 +81,7 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
             tableSchema = tableSchema.copy(newOptions);
         }
         this.tableSchema = tableSchema;
+        this.lockFactory = lockFactory;
     }
 
     @Override
@@ -229,23 +231,33 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
     public TableCommitImpl newCommit(String commitUser) {
         return new TableCommitImpl(
                 store().newCommit(commitUser),
+                coreOptions().commitCallbacks(),
                 coreOptions().writeOnly() ? null : store().newExpire(),
                 coreOptions().writeOnly() ? null : store().newPartitionExpire(commitUser),
+                lockFactory.create(),
                 CoreOptions.fromMap(options()).consumerExpireTime(),
                 new ConsumerManager(fileIO, path));
     }
 
     private Optional<TableSchema> tryTimeTravel(Options options) {
         CoreOptions coreOptions = new CoreOptions(options);
-        Long snapshotId;
 
         switch (coreOptions.startupMode()) {
             case FROM_SNAPSHOT:
             case FROM_SNAPSHOT_FULL:
-                snapshotId = coreOptions.scanSnapshotId();
-                if (snapshotManager().snapshotExists(snapshotId)) {
-                    long schemaId = snapshotManager().snapshot(snapshotId).schemaId();
-                    return Optional.of(schemaManager().schema(schemaId).copy(options.toMap()));
+                if (coreOptions.scanSnapshotId() != null) {
+                    long snapshotId = coreOptions.scanSnapshotId();
+                    if (snapshotManager().snapshotExists(snapshotId)) {
+                        long schemaId = snapshotManager().snapshot(snapshotId).schemaId();
+                        return Optional.of(schemaManager().schema(schemaId).copy(options.toMap()));
+                    }
+                } else {
+                    String tagName = coreOptions.scanTagName();
+                    TagManager tagManager = tagManager();
+                    if (tagManager.tagExists(tagName)) {
+                        long schemaId = tagManager.taggedSnapshot(tagName).schemaId();
+                        return Optional.of(schemaManager().schema(schemaId).copy(options.toMap()));
+                    }
                 }
                 return Optional.empty();
             case FROM_TIMESTAMP:
@@ -270,11 +282,13 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
 
     @Override
     public void rollbackTo(long snapshotId) {
-        try {
-            snapshotManager().rollbackTo(store().newSnapshotDeletion(), snapshotId);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        SnapshotManager snapshotManager = snapshotManager();
+        checkArgument(
+                snapshotManager.snapshotExists(snapshotId),
+                "Rollback snapshot '%s' doesn't exist.",
+                snapshotId);
+
+        rollbackHelper().cleanLargerThan(snapshotManager.snapshot(snapshotId));
     }
 
     @Override
@@ -286,19 +300,49 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
                 fromSnapshotId);
 
         Snapshot snapshot = snapshotManager.snapshot(fromSnapshotId);
-        TagManager tagManager = new TagManager(fileIO, path);
-        tagManager.createTag(snapshot, tagName);
+        tagManager().createTag(snapshot, tagName);
     }
 
     @Override
     public void deleteTag(String tagName) {
-        checkArgument(!StringUtils.isBlank(tagName), "Tag name '%s' is blank.", tagName);
+        tagManager().deleteTag(tagName, store().newTagDeletion(), snapshotManager());
+    }
 
-        TagManager tagManager = new TagManager(fileIO, path);
+    @Override
+    public void rollbackTo(String tagName) {
+        TagManager tagManager = tagManager();
+        checkArgument(tagManager.tagExists(tagName), "Rollback tag '%s' doesn't exist.", tagName);
+
         Snapshot taggedSnapshot = tagManager.taggedSnapshot(tagName);
+        rollbackHelper().cleanLargerThan(taggedSnapshot);
 
-        TagDeletion tagDeletion = store().newTagDeletion();
-        tagDeletion.delete(taggedSnapshot);
-        fileIO.deleteQuietly(tagManager.tagPath(tagName));
+        try {
+            // it is possible that the earliest snapshot is later than the rollback tag because of
+            // snapshot expiration, in this case the `cleanLargerThan` method will delete all
+            // snapshots, so we should write the tag file to snapshot directory and modify the
+            // earliest hint
+            SnapshotManager snapshotManager = snapshotManager();
+            if (!snapshotManager.snapshotExists(taggedSnapshot.id())) {
+                fileIO.writeFileUtf8(
+                        snapshotManager().snapshotPath(taggedSnapshot.id()),
+                        fileIO.readFileUtf8(tagManager.tagPath(tagName)));
+                snapshotManager.commitEarliestHint(taggedSnapshot.id());
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private TagManager tagManager() {
+        return new TagManager(fileIO, path);
+    }
+
+    private RollbackHelper rollbackHelper() {
+        return new RollbackHelper(
+                snapshotManager(),
+                tagManager(),
+                fileIO,
+                store().newSnapshotDeletion(),
+                store().newTagDeletion());
     }
 }

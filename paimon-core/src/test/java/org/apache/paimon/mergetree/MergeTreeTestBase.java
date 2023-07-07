@@ -187,13 +187,15 @@ public abstract class MergeTreeTestBase {
                         BinaryRow.EMPTY_ROW,
                         0,
                         options.fileCompressionPerLevel(),
-                        options.fileCompression());
+                        options.fileCompression(),
+                        options);
         compactWriterFactory =
                 writerFactoryBuilder.build(
                         BinaryRow.EMPTY_ROW,
                         0,
                         options.fileCompressionPerLevel(),
-                        options.fileCompression());
+                        options.fileCompression(),
+                        options);
         writer = createMergeTreeWriter(Collections.emptyList());
     }
 
@@ -287,8 +289,7 @@ public abstract class MergeTreeTestBase {
                         new UniversalCompaction(
                                 options.maxSizeAmplificationPercent(),
                                 options.sortedRunSizeRatio(),
-                                options.numSortedRunCompactionTrigger(),
-                                options.maxSortedRunNum()),
+                                options.numSortedRunCompactionTrigger()),
                         comparator,
                         options.targetFileSize(),
                         options.numSortedRunStopTrigger(),
@@ -448,8 +449,7 @@ public abstract class MergeTreeTestBase {
                 new UniversalCompaction(
                         options.maxSizeAmplificationPercent(),
                         options.sortedRunSizeRatio(),
-                        options.numSortedRunCompactionTrigger(),
-                        options.maxSortedRunNum());
+                        options.numSortedRunCompactionTrigger());
         return new MergeTreeCompactManager(
                 compactExecutor,
                 new Levels(comparator, files, options.numLevels()),
@@ -562,7 +562,7 @@ public abstract class MergeTreeTestBase {
                         readerFactory,
                         comparator,
                         DeduplicateMergeFunction.factory().create(),
-                        sortEngine);
+                        new MergeSorter(options, null, null, null));
         List<TestRecord> records = new ArrayList<>();
         try (RecordReaderIterator<KeyValue> iterator = new RecordReaderIterator<>(reader)) {
             while (iterator.hasNext()) {
@@ -608,7 +608,7 @@ public abstract class MergeTreeTestBase {
                             compactReaderFactory,
                             comparator,
                             DeduplicateMergeFunction.factory().create(),
-                            sortEngine);
+                            new MergeSorter(options, null, null, null));
             writer.write(new RecordReaderIterator<>(sectionsReader));
             writer.close();
             return new CompactResult(extractFilesFromSections(sections), writer.result());

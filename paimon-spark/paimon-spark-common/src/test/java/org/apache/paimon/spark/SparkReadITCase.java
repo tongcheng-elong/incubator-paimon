@@ -113,6 +113,30 @@ public class SparkReadITCase extends SparkReadTestBase {
     }
 
     @Test
+    public void testManifestsTable() {
+        List<Row> rows =
+                spark.table("`t1$manifests`")
+                        .select("schema_id", "file_name", "file_size")
+                        .collectAsList();
+        Long schemaId = rows.get(0).getLong(0);
+        String fileName = rows.get(0).getString(1);
+        Long fileSize = rows.get(0).getLong(2);
+
+        assertThat(schemaId).isEqualTo(0L);
+        assertThat(fileName).startsWith("manifest");
+        assertThat(fileSize).isGreaterThan(0L);
+    }
+
+    @Test
+    public void testManifestsTableWithRecordCount() {
+        List<Row> rows =
+                spark.table("`t1$manifests`")
+                        .select("num_added_files", "num_deleted_files")
+                        .collectAsList();
+        assertThat(rows.toString()).isEqualTo("[[1,0]]");
+    }
+
+    @Test
     public void testCatalogFilterPushDown() {
         innerTestSimpleTypeFilterPushDown(spark.table("t1"));
 
@@ -222,9 +246,8 @@ public class SparkReadITCase extends SparkReadTestBase {
         assertThat(spark.sql("SHOW CREATE TABLE t_pk_as").collectAsList().toString())
                 .isEqualTo(
                         String.format(
-                                "[[%sTBLPROPERTIES (\n  'path' = '%s')\n]]",
-                                showCreateString(
-                                        "t_pk_as", "a BIGINT NOT NULL", "b STRING", "c STRING"),
+                                "[[%sTBLPROPERTIES (\n  'path' = '%s',\n  'primary-key' = 'a')\n]]",
+                                showCreateString("t_pk_as", "a BIGINT", "b STRING", "c STRING"),
                                 new Path(warehousePath, "default.db/t_pk_as")));
         List<Row> resultPk = spark.sql("SELECT * FROM t_pk_as").collectAsList();
 
@@ -250,15 +273,16 @@ public class SparkReadITCase extends SparkReadTestBase {
                                 "[[%s"
                                         + "PARTITIONED BY (dt)\n"
                                         + "TBLPROPERTIES (\n"
-                                        + "  'path' = '%s')\n"
+                                        + "  'path' = '%s',\n"
+                                        + "  'primary-key' = 'dt,hh')\n"
                                         + "]]",
                                 showCreateString(
                                         "t_all_as",
                                         "user_id BIGINT",
                                         "item_id BIGINT",
                                         "behavior STRING",
-                                        "dt STRING NOT NULL",
-                                        "hh STRING NOT NULL"),
+                                        "dt STRING",
+                                        "hh STRING"),
                                 new Path(warehousePath, "default.db/t_all_as")));
         List<Row> resultAll = spark.sql("SELECT * FROM t_all_as").collectAsList();
         assertThat(resultAll.stream().map(Row::toString))
@@ -335,11 +359,9 @@ public class SparkReadITCase extends SparkReadTestBase {
                                         + "COMMENT 'tbl comment'\n"
                                         + "TBLPROPERTIES (\n"
                                         + "  'k1' = 'v1',\n"
-                                        + "  'path' = '%s')\n]]",
-                                showCreateString(
-                                        "tbl",
-                                        "a INT NOT NULL COMMENT 'a comment'",
-                                        "b STRING NOT NULL"),
+                                        + "  'path' = '%s',\n"
+                                        + "  'primary-key' = 'a,b')\n]]",
+                                showCreateString("tbl", "a INT COMMENT 'a comment'", "b STRING"),
                                 new Path(warehousePath, "default.db/tbl")));
     }
 
