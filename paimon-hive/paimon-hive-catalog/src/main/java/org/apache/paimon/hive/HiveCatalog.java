@@ -132,16 +132,6 @@ public class HiveCatalog extends AbstractCatalog {
     }
 
     @Override
-    public Path getDataTableLocation(Identifier identifier) {
-        try {
-            Table table = client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
-            return new Path(table.getSd().getLocation());
-        } catch (TException e) {
-            throw new RuntimeException("Failed to get table location", e);
-        }
-    }
-
-    @Override
     public Optional<CatalogLock.Factory> lockFactory() {
         return lockEnabled()
                 ? Optional.of(HiveCatalogLock.createFactory(hiveConf, clientClassName))
@@ -310,7 +300,7 @@ public class HiveCatalog extends AbstractCatalog {
         try {
             client.createTable(table);
         } catch (TException e) {
-            Path path = super.getDataTableLocation(identifier);
+            Path path = getDataTableLocation(identifier);
             try {
                 fileIO.deleteDirectoryQuietly(path);
             } catch (Exception ee) {
@@ -353,7 +343,7 @@ public class HiveCatalog extends AbstractCatalog {
     @Override
     public void alterTable(
             Identifier identifier, List<SchemaChange> changes, boolean ignoreIfNotExists)
-            throws TableNotExistException {
+            throws TableNotExistException, ColumnAlreadyExistException, ColumnNotExistException {
         checkNotSystemTable(identifier, "alterTable");
         if (!paimonTableExists(identifier)) {
             if (ignoreIfNotExists) {
@@ -364,25 +354,19 @@ public class HiveCatalog extends AbstractCatalog {
         }
 
         checkFieldNamesUpperCaseInSchemaChange(changes);
-        try {
-            checkIdentifierUpperCase(identifier);
-            final SchemaManager schemaManager = new SchemaManager(fileIO, getDataTableLocation(identifier))
-                    .withLock(lock(identifier));
-            // first commit changes to underlying files
-            TableSchema schema = schemaManager.commitChanges(changes);
 
-            try {
-                // sync to hive hms
-                Table table =
-                        client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
-                updateHmsTable(table, identifier, schema);
-                client.alter_table(identifier.getDatabaseName(), identifier.getObjectName(), table);
-            } catch (TException te) {
-                schemaManager.deleteSchema(schema.id());
-                throw te;
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        final SchemaManager schemaManager = schemaManager(identifier);
+        // first commit changes to underlying files
+        TableSchema schema = schemaManager.commitChanges(changes);
+
+        try {
+            // sync to hive hms
+            Table table = client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
+            updateHmsTable(table, identifier, schema);
+            client.alter_table(identifier.getDatabaseName(), identifier.getObjectName(), table);
+        } catch (TException te) {
+            schemaManager.deleteSchema(schema.id());
+            throw new RuntimeException(te);
         }
     }
 
@@ -483,7 +467,7 @@ public class HiveCatalog extends AbstractCatalog {
         table.setSd(sd);
 
         // update location
-        locationHelper.specifyTableLocation(table, super.getDataTableLocation(identifier).toString());
+        locationHelper.specifyTableLocation(table, getDataTableLocation(identifier).toString());
     }
 
     private StorageDescriptor convertToStorageDescriptor(TableSchema schema) {
@@ -557,7 +541,7 @@ public class HiveCatalog extends AbstractCatalog {
 
     private SchemaManager schemaManager(Identifier identifier) {
         checkIdentifierUpperCase(identifier);
-        return new SchemaManager(fileIO, super.getDataTableLocation(identifier))
+        return new SchemaManager(fileIO, getDataTableLocation(identifier))
                 .withLock(lock(identifier));
     }
 
