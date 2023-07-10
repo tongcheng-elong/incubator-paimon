@@ -19,6 +19,7 @@
 package org.apache.paimon.flink.source.assigners;
 
 import org.apache.paimon.flink.source.FileStoreSourceSplit;
+import org.apache.paimon.table.source.DataSplit;
 
 import javax.annotation.Nullable;
 
@@ -64,5 +65,10 @@ public class FIFOSplitAssigner implements SplitAssigner {
     @Override
     public Collection<FileStoreSourceSplit> remainingSplits() {
         return new ArrayList<>(pendingSplitAssignment);
+    }
+
+    @Override
+    public int assignTask(DataSplit dataSplit, int parallelism) {
+        return 0;
     }
 }

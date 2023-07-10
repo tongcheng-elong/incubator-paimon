@@ -18,8 +18,6 @@
 
 package org.apache.paimon.flink.source;
 
-import org.apache.paimon.data.BinaryRow;
-import org.apache.paimon.flink.sink.ChannelComputer;
 import org.apache.paimon.flink.source.assigners.FIFOSplitAssigner;
 import org.apache.paimon.flink.source.assigners.PreAssignSplitAssigner;
 import org.apache.paimon.flink.source.assigners.SplitAssigner;
@@ -103,7 +101,7 @@ public class ContinuousFileSplitEnumerator
     }
 
     private void addSplit(FileStoreSourceSplit split) {
-        splitAssigner.addSplit(PreAssignSplitAssigner.assignTask(((DataSplit) split.split()),context.currentParallelism()), split);
+        splitAssigner.addSplit(splitAssigner.assignTask((DataSplit) split.split(), context.currentParallelism()), split);
     }
 
     @Override

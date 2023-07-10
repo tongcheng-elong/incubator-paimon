@@ -19,7 +19,7 @@
 package org.apache.paimon.flink.source.operator;
 
 import org.apache.flink.api.common.functions.Partitioner;
-import org.apache.paimon.flink.source.assigners.PreAssignSplitAssigner;
+import org.apache.paimon.flink.sink.ChannelComputer;
 import org.apache.paimon.flink.utils.JavaTypeInfo;
 import org.apache.paimon.table.source.DataSplit;
 import org.apache.paimon.table.source.EndOfScanException;
@@ -236,7 +236,10 @@ public class MonitorFunction extends RichSourceFunction<Split>
                         name + "-Monitor",
                         new JavaTypeInfo<>(Split.class))
                 .forceNonParallel()
-                .partitionCustom((Partitioner<Split>) (split, numPartitions) -> PreAssignSplitAssigner.assignTask(((DataSplit) split), numPartitions), split -> split)
+                .partitionCustom((Partitioner<Split>) (split, numPartitions) ->
+                        ChannelComputer.select(
+                                ((DataSplit) split).partition(),
+                                ((DataSplit) split).bucket(), numPartitions), split -> split)
                 .transform(name + "-Reader", typeInfo, new ReadOperator(readBuilder));
     }
 

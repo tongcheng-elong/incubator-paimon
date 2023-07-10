@@ -19,6 +19,7 @@
 package org.apache.paimon.flink.source.assigners;
 
 import org.apache.paimon.flink.source.FileStoreSourceSplit;
+import org.apache.paimon.table.source.DataSplit;
 
 import javax.annotation.Nullable;
 
@@ -50,4 +51,7 @@ public interface SplitAssigner {
 
     /** Gets the remaining splits that this assigner has pending. */
     Collection<FileStoreSourceSplit> remainingSplits();
+
+    /** Assign tasks to splits */
+    int assignTask(DataSplit dataSplit, int parallelism);
 }
