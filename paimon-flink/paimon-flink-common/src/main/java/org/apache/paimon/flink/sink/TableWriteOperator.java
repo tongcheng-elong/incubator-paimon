@@ -70,8 +70,7 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
                             containLogSystem
                                     ? ChannelComputer.select(bucket, numTasks)
                                     : ChannelComputer.select(partition, bucket, numTasks);
-                    System.out.printf("from runtime write,task:" + task + " context index:" + indexOfTasks + "current:" + getRuntimeContext().getIndexOfThisSubtask());
-                    return task == getRuntimeContext().getIndexOfThisSubtask();
+                    return task == indexOfTasks;
                 };
         state = new StoreSinkWriteState(context, stateFilter);
 
