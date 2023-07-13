@@ -25,12 +25,12 @@ import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.fs.FileIO;
 import org.apache.paimon.fs.Path;
 import org.apache.paimon.manifest.ManifestCacheFilter;
+import org.apache.paimon.metastore.MetastoreClient;
 import org.apache.paimon.operation.AppendOnlyFileStoreRead;
 import org.apache.paimon.operation.AppendOnlyFileStoreScan;
 import org.apache.paimon.operation.AppendOnlyFileStoreWrite;
 import org.apache.paimon.operation.FileStoreScan;
 import org.apache.paimon.operation.Lock;
-import org.apache.paimon.operation.ReverseReader;
 import org.apache.paimon.predicate.Predicate;
 import org.apache.paimon.reader.RecordReader;
 import org.apache.paimon.schema.TableSchema;
@@ -43,6 +43,8 @@ import org.apache.paimon.table.source.SplitGenerator;
 import org.apache.paimon.types.RowKind;
 import org.apache.paimon.utils.Preconditions;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.util.function.BiConsumer;
 
@@ -54,17 +56,22 @@ public class AppendOnlyFileStoreTable extends AbstractFileStoreTable {
     private transient AppendOnlyFileStore lazyStore;
 
     AppendOnlyFileStoreTable(FileIO fileIO, Path path, TableSchema tableSchema) {
-        this(fileIO, path, tableSchema, Lock.emptyFactory());
+        this(fileIO, path, tableSchema, Lock.emptyFactory(), null);
     }
 
     AppendOnlyFileStoreTable(
-            FileIO fileIO, Path path, TableSchema tableSchema, Lock.Factory lockFactory) {
-        super(fileIO, path, tableSchema, lockFactory);
+            FileIO fileIO,
+            Path path,
+            TableSchema tableSchema,
+            Lock.Factory lockFactory,
+            @Nullable MetastoreClient.Factory metastoreClientFactory) {
+        super(fileIO, path, tableSchema, lockFactory, metastoreClientFactory);
     }
 
     @Override
     protected FileStoreTable copy(TableSchema newTableSchema) {
-        return new AppendOnlyFileStoreTable(fileIO, path, newTableSchema, lockFactory);
+        return new AppendOnlyFileStoreTable(
+                fileIO, path, newTableSchema, lockFactory, metastoreClientFactory);
     }
 
     @Override
@@ -94,8 +101,6 @@ public class AppendOnlyFileStoreTable extends AbstractFileStoreTable {
     /**
      * Currently, the streaming read of overwrite is implemented by reversing the {@link RowKind} of
      * overwrote records to {@link RowKind#DELETE}, so only tables that have primary key support it.
-     *
-     * @see ReverseReader
      */
     @Override
     public boolean supportStreamingReadOverwrite() {
@@ -108,7 +113,7 @@ public class AppendOnlyFileStoreTable extends AbstractFileStoreTable {
     }
 
     @Override
-    public InnerTableRead newRead() {
+    public InnerTableRead innerRead() {
         AppendOnlyFileStoreRead read = store().newRead();
         return new InnerTableRead() {
             @Override

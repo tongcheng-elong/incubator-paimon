@@ -21,15 +21,21 @@ package org.apache.paimon.table;
 import org.apache.paimon.CoreOptions;
 import org.apache.paimon.Snapshot;
 import org.apache.paimon.consumer.ConsumerManager;
+import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.fs.FileIO;
 import org.apache.paimon.fs.Path;
+import org.apache.paimon.metastore.AddPartitionCommitCallback;
+import org.apache.paimon.metastore.MetastoreClient;
+import org.apache.paimon.operation.DefaultValueAssiger;
 import org.apache.paimon.operation.FileStoreScan;
 import org.apache.paimon.operation.Lock;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.predicate.Predicate;
+import org.apache.paimon.reader.RecordReader;
 import org.apache.paimon.schema.SchemaManager;
 import org.apache.paimon.schema.SchemaValidation;
 import org.apache.paimon.schema.TableSchema;
+import org.apache.paimon.table.sink.CommitCallback;
 import org.apache.paimon.table.sink.DynamicBucketRowKeyExtractor;
 import org.apache.paimon.table.sink.FixedBucketRowKeyExtractor;
 import org.apache.paimon.table.sink.RowKeyExtractor;
@@ -37,8 +43,10 @@ import org.apache.paimon.table.sink.TableCommitImpl;
 import org.apache.paimon.table.sink.UnawareBucketRowKeyExtractor;
 import org.apache.paimon.table.source.InnerStreamTableScan;
 import org.apache.paimon.table.source.InnerStreamTableScanImpl;
+import org.apache.paimon.table.source.InnerTableRead;
 import org.apache.paimon.table.source.InnerTableScan;
 import org.apache.paimon.table.source.InnerTableScanImpl;
+import org.apache.paimon.table.source.Split;
 import org.apache.paimon.table.source.SplitGenerator;
 import org.apache.paimon.table.source.snapshot.SnapshotReader;
 import org.apache.paimon.table.source.snapshot.SnapshotReaderImpl;
@@ -48,9 +56,13 @@ import org.apache.paimon.utils.TagManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -69,9 +81,14 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
     protected final Path path;
     protected final TableSchema tableSchema;
     protected final Lock.Factory lockFactory;
+    @Nullable protected final MetastoreClient.Factory metastoreClientFactory;
 
     public AbstractFileStoreTable(
-            FileIO fileIO, Path path, TableSchema tableSchema, Lock.Factory lockFactory) {
+            FileIO fileIO,
+            Path path,
+            TableSchema tableSchema,
+            Lock.Factory lockFactory,
+            @Nullable MetastoreClient.Factory metastoreClientFactory) {
         this.fileIO = fileIO;
         this.path = path;
         if (!tableSchema.options().containsKey(PATH.key())) {
@@ -82,6 +99,7 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
         }
         this.tableSchema = tableSchema;
         this.lockFactory = lockFactory;
+        this.metastoreClientFactory = metastoreClientFactory;
     }
 
     @Override
@@ -110,12 +128,17 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
                 coreOptions(),
                 snapshotManager(),
                 splitGenerator(),
-                nonPartitionFilterConsumer());
+                nonPartitionFilterConsumer(),
+                new DefaultValueAssiger(tableSchema));
     }
 
     @Override
     public InnerTableScan newScan() {
-        return new InnerTableScanImpl(coreOptions(), newSnapshotReader(), snapshotManager());
+        return new InnerTableScanImpl(
+                coreOptions(),
+                newSnapshotReader(),
+                snapshotManager(),
+                new DefaultValueAssiger(tableSchema));
     }
 
     @Override
@@ -124,7 +147,8 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
                 coreOptions(),
                 newSnapshotReader(),
                 snapshotManager(),
-                supportStreamingReadOverwrite());
+                supportStreamingReadOverwrite(),
+                new DefaultValueAssiger(tableSchema));
     }
 
     public abstract SplitGenerator splitGenerator();
@@ -231,12 +255,20 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
     public TableCommitImpl newCommit(String commitUser) {
         return new TableCommitImpl(
                 store().newCommit(commitUser),
-                coreOptions().commitCallbacks(),
+                createCommitCallbacks(),
                 coreOptions().writeOnly() ? null : store().newExpire(),
                 coreOptions().writeOnly() ? null : store().newPartitionExpire(commitUser),
                 lockFactory.create(),
                 CoreOptions.fromMap(options()).consumerExpireTime(),
                 new ConsumerManager(fileIO, path));
+    }
+
+    private List<CommitCallback> createCommitCallbacks() {
+        List<CommitCallback> callbacks = new ArrayList<>(coreOptions().commitCallbacks());
+        if (coreOptions().partitionedTableInMetastore() && metastoreClientFactory != null) {
+            callbacks.add(new AddPartitionCommitCallback(metastoreClientFactory.create()));
+        }
+        return callbacks;
     }
 
     private Optional<TableSchema> tryTimeTravel(Options options) {
@@ -289,6 +321,42 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
                 snapshotId);
 
         rollbackHelper().cleanLargerThan(snapshotManager.snapshot(snapshotId));
+    }
+
+    abstract InnerTableRead innerRead();
+
+    @Override
+    public InnerTableRead newRead() {
+        InnerTableRead innerTableRead = innerRead();
+        DefaultValueAssiger defaultValueAssiger = new DefaultValueAssiger(tableSchema);
+        return new InnerTableRead() {
+            @Override
+            public InnerTableRead withFilter(Predicate predicate) {
+                innerTableRead.withFilter(defaultValueAssiger.handlePredicate(predicate));
+                return this;
+            }
+
+            @Override
+            public InnerTableRead withProjection(int[][] projection) {
+                defaultValueAssiger.handleProject(projection);
+                innerTableRead.withProjection(projection);
+                return this;
+            }
+
+            @Override
+            public RecordReader<InternalRow> createReader(Split split) throws IOException {
+                RecordReader<InternalRow> reader =
+                        defaultValueAssiger.assignFieldsDefaultValue(
+                                innerTableRead.createReader(split));
+                return reader;
+            }
+
+            @Override
+            public InnerTableRead forceKeepDelete() {
+                innerTableRead.forceKeepDelete();
+                return this;
+            }
+        };
     }
 
     @Override

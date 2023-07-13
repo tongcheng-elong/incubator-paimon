@@ -53,6 +53,7 @@ import static org.apache.paimon.options.description.TextElement.text;
 
 /** Core options for paimon. */
 public class CoreOptions implements Serializable {
+    public static final String DEFAULT_VALUE_SUFFIX = "default-value";
 
     public static final String FIELDS_PREFIX = "fields";
 
@@ -754,6 +755,16 @@ public class CoreOptions implements Serializable {
                             "Parameter string for the constructor of class #. "
                                     + "Callback class should parse the parameter by itself.");
 
+    public static final ConfigOption<Boolean> METASTORE_PARTITIONED_TABLE =
+            key("metastore.partitioned-table")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Whether to create this table as a partitioned table in metastore.\n"
+                                    + "For example, if you want to list all partitions of a Paimon table in Hive, "
+                                    + "you need to create this table as a partitioned table in Hive metastore.\n"
+                                    + "This config option does not affect the default filesystem metastore.");
+
     private final Options options;
 
     public CoreOptions(Map<String, String> options) {
@@ -1086,6 +1097,24 @@ public class CoreOptions implements Serializable {
         return options.get(CONSUMER_EXPIRATION_TIME);
     }
 
+    public boolean partitionedTableInMetastore() {
+        return options.get(METASTORE_PARTITIONED_TABLE);
+    }
+
+    public Options getFieldDefaultValues() {
+        Map<String, String> defultValues = new HashMap<>();
+        for (Map.Entry<String, String> option : options.toMap().entrySet()) {
+            String key = option.getKey();
+            String fieldPrefix = FIELDS_PREFIX + ".";
+            String defaultValueSuffix = "." + DEFAULT_VALUE_SUFFIX;
+            if (key != null && key.startsWith(fieldPrefix) && key.endsWith(defaultValueSuffix)) {
+                String fieldName = key.replace(fieldPrefix, "").replace(defaultValueSuffix, "");
+                defultValues.put(fieldName, option.getValue());
+            }
+        }
+        return new Options(defultValues);
+    }
+
     public List<CommitCallback> commitCallbacks() {
         List<CommitCallback> result = new ArrayList<>();
         for (String className : options.get(COMMIT_CALLBACKS).split(",")) {
@@ -1096,9 +1125,7 @@ public class CoreOptions implements Serializable {
 
             Class<?> clazz;
             try {
-                clazz =
-                        Class.forName(
-                                className, true, Thread.currentThread().getContextClassLoader());
+                clazz = Class.forName(className, true, this.getClass().getClassLoader());
             } catch (ClassNotFoundException e) {
                 throw new RuntimeException(e);
             }
