@@ -18,14 +18,14 @@
 
 package org.apache.paimon.flink.sink;
 
+import org.apache.paimon.flink.ChannelComputer;
+
 import org.apache.flink.runtime.io.network.api.writer.SubtaskStateMapper;
 import org.apache.flink.runtime.plugable.SerializationDelegate;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-
-import org.apache.paimon.flink.ChannelComputer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,7 +42,7 @@ public class FlinkStreamPartitioner<T> extends StreamPartitioner<T> {
 
     @Override
     public void setup(int numberOfChannels) {
-        LOG.info("setup channel numbers:{}",numberOfChannels);
+        LOG.info("setup channel numbers:{}", numberOfChannels);
         super.setup(numberOfChannels);
         channelComputer.setup(numberOfChannels);
     }

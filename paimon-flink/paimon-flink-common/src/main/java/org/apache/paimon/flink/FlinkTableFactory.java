@@ -58,7 +58,10 @@ public class FlinkTableFactory extends AbstractFlinkTableFactory {
                     context.isTemporary());
         }
         createTableIfNeeded(context);
-        LOG.info("table:{} with options:{}",context.getObjectIdentifier(),context.getCatalogTable().getOptions());
+        LOG.info(
+                "table:{} with options:{}",
+                context.getObjectIdentifier(),
+                context.getCatalogTable().getOptions());
         return super.createDynamicTableSource(context);
     }
 
@@ -75,7 +78,10 @@ public class FlinkTableFactory extends AbstractFlinkTableFactory {
                     context.isTemporary());
         }
         createTableIfNeeded(context);
-        LOG.info("table:{} with options:{}",context.getObjectIdentifier(),context.getCatalogTable().getOptions());
+        LOG.info(
+                "table:{} with options:{}",
+                context.getObjectIdentifier(),
+                context.getCatalogTable().getOptions());
         return super.createDynamicTableSink(context);
     }
 

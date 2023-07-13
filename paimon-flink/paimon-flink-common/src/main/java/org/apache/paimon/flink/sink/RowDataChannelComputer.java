@@ -47,7 +47,7 @@ public class RowDataChannelComputer implements ChannelComputer<RowData> {
 
     @Override
     public void setup(int numChannels) {
-        LOG.info("setup channel numbers:{}",numChannels);
+        LOG.info("setup channel numbers:{}", numChannels);
         this.numChannels = numChannels;
         this.extractor = new RowDataKeyAndBucketExtractor(schema);
     }

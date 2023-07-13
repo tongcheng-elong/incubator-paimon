@@ -112,7 +112,8 @@ public class PreAssignSplitAssigner implements SplitAssigner {
     public int assignTask(DataSplit dataSplit, int parallelism) {
         // we assign the (partition + bucket) % parallelism,
         // We should assign tasks of the same partition and the same bucket to the same task,
-        // and randomly assign different partitions to different tasks to make full use of parallel resources
+        // and randomly assign different partitions to different tasks to make full use of parallel
+        // resources
         BinaryRow partition = dataSplit.partition();
         int bucket = dataSplit.bucket();
         return ChannelComputer.select(partition, bucket, parallelism);

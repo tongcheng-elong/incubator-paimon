@@ -18,7 +18,6 @@
 
 package org.apache.paimon.flink.source.operator;
 
-import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.paimon.flink.ChannelComputer;
 import org.apache.paimon.flink.utils.JavaTypeInfo;
 import org.apache.paimon.table.source.DataSplit;
@@ -27,6 +26,7 @@ import org.apache.paimon.table.source.ReadBuilder;
 import org.apache.paimon.table.source.Split;
 import org.apache.paimon.table.source.StreamTableScan;
 
+import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -237,10 +237,14 @@ public class MonitorFunction extends RichSourceFunction<Split>
                         name + "-Monitor",
                         new JavaTypeInfo<>(Split.class))
                 .forceNonParallel()
-                .partitionCustom((Partitioner<Split>) (split, numPartitions) ->
-                        ChannelComputer.select(
-                                ((DataSplit) split).partition(),
-                                ((DataSplit) split).bucket(), numPartitions), split -> split)
+                .partitionCustom(
+                        (Partitioner<Split>)
+                                (split, numPartitions) ->
+                                        ChannelComputer.select(
+                                                ((DataSplit) split).partition(),
+                                                ((DataSplit) split).bucket(),
+                                                numPartitions),
+                        split -> split)
                 .transform(name + "-Reader", typeInfo, new ReadOperator(readBuilder));
     }
 }

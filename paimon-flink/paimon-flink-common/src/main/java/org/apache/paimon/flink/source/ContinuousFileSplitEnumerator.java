@@ -49,7 +49,6 @@ import java.util.Set;
 
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
-import static org.apache.paimon.utils.SerializationUtils.deserializeBinaryRow;
 
 /** A continuously monitoring enumerator. */
 public class ContinuousFileSplitEnumerator
@@ -102,7 +101,9 @@ public class ContinuousFileSplitEnumerator
     }
 
     private void addSplit(FileStoreSourceSplit split) {
-        splitAssigner.addSplit(splitAssigner.assignTask((DataSplit) split.split(), context.currentParallelism()), split);
+        splitAssigner.addSplit(
+                splitAssigner.assignTask((DataSplit) split.split(), context.currentParallelism()),
+                split);
     }
 
     @Override
