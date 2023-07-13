@@ -18,8 +18,6 @@
 
 package org.apache.paimon.flink.source;
 
-import org.apache.paimon.data.BinaryRow;
-import org.apache.paimon.flink.sink.ChannelComputer;
 import org.apache.paimon.flink.source.assigners.FIFOSplitAssigner;
 import org.apache.paimon.flink.source.assigners.PreAssignSplitAssigner;
 import org.apache.paimon.flink.source.assigners.SplitAssigner;
@@ -104,7 +102,7 @@ public class ContinuousFileSplitEnumerator
     }
 
     private void addSplit(FileStoreSourceSplit split) {
-        splitAssigner.addSplit(assignTask(((DataSplit) split.split()).bucket()), split);
+        splitAssigner.addSplit(splitAssigner.assignTask((DataSplit) split.split(), context.currentParallelism()), split);
     }
 
     @Override
@@ -209,16 +207,5 @@ public class ContinuousFileSplitEnumerator
             }
         }
         return assignment;
-    }
-
-    private int assignTask(int bucket) {
-        if (bucketMode == BucketMode.UNAWARE) {
-            // we just assign task 0 when bucket unaware
-            return 0;
-        } else {
-            // if not bucket unaware, we assign the bucket % parallelism, the same bucket data go
-            // into the same task
-            return bucket % context.currentParallelism();
-        }
     }
 }

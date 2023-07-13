@@ -18,6 +18,7 @@
 
 package org.apache.paimon.flink.sink;
 
+import org.apache.paimon.flink.ChannelComputer;
 import org.apache.paimon.schema.TableSchema;
 
 import org.apache.flink.api.java.tuple.Tuple2;

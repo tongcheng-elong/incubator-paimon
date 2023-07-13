@@ -20,7 +20,7 @@ package org.apache.paimon.flink.sink.cdc;
 
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
-import org.apache.paimon.flink.sink.ChannelComputer;
+import org.apache.paimon.flink.ChannelComputer;
 import org.apache.paimon.table.FileStoreTable;
 
 import java.util.HashMap;

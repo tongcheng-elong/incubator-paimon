@@ -18,7 +18,10 @@
 
 package org.apache.paimon.flink.source.assigners;
 
+import org.apache.paimon.data.BinaryRow;
+import org.apache.paimon.flink.ChannelComputer;
 import org.apache.paimon.flink.source.FileStoreSourceSplit;
+import org.apache.paimon.table.source.DataSplit;
 import org.apache.paimon.utils.BinPacking;
 
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
@@ -103,5 +106,15 @@ public class PreAssignSplitAssigner implements SplitAssigner {
             assignment.put(i, new LinkedList<>(assignmentList.get(i)));
         }
         return assignment;
+    }
+
+    @Override
+    public int assignTask(DataSplit dataSplit, int parallelism) {
+        // we assign the (partition + bucket) % parallelism,
+        // We should assign tasks of the same partition and the same bucket to the same task,
+        // and randomly assign different partitions to different tasks to make full use of parallel resources
+        BinaryRow partition = dataSplit.partition();
+        int bucket = dataSplit.bucket();
+        return ChannelComputer.select(partition, bucket, parallelism);
     }
 }

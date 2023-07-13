@@ -25,6 +25,7 @@ import org.apache.flink.streaming.api.transformations.PartitionTransformation;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
+import org.apache.paimon.flink.ChannelComputer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

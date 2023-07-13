@@ -19,6 +19,7 @@
 package org.apache.paimon.flink.sink;
 
 import org.apache.paimon.annotation.VisibleForTesting;
+import org.apache.paimon.flink.ChannelComputer;
 import org.apache.paimon.flink.sink.StoreSinkWriteState.StateValueFilter;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.table.FileStoreTable;

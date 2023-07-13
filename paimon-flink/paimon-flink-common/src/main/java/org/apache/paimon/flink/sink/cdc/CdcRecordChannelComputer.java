@@ -19,7 +19,7 @@
 package org.apache.paimon.flink.sink.cdc;
 
 import org.apache.paimon.data.BinaryRow;
-import org.apache.paimon.flink.sink.ChannelComputer;
+import org.apache.paimon.flink.ChannelComputer;
 import org.apache.paimon.schema.TableSchema;
 import org.apache.paimon.table.sink.KeyAndBucketExtractor;
 

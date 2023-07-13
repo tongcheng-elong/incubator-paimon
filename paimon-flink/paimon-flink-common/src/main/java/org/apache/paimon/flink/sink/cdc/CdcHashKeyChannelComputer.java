@@ -18,7 +18,7 @@
 
 package org.apache.paimon.flink.sink.cdc;
 
-import org.apache.paimon.flink.sink.ChannelComputer;
+import org.apache.paimon.flink.ChannelComputer;
 import org.apache.paimon.schema.TableSchema;
 
 /** Hash key of a {@link CdcRecord}. */
