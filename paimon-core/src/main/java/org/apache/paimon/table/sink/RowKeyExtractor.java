@@ -61,10 +61,7 @@ public abstract class RowKeyExtractor implements KeyAndBucketExtractor<InternalR
 
     @Override
     public BinaryRow trimmedPrimaryKey() {
-        if (trimmedPrimaryKey == null) {
-            trimmedPrimaryKey = partitionKeyExtractor.trimmedPrimaryKey(record);
-        }
-        return trimmedPrimaryKey;
+        return partitionKeyExtractor.trimmedPrimaryKey(record);
     }
 
     @Override
