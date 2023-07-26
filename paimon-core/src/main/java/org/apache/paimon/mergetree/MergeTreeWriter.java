@@ -151,7 +151,7 @@ public class MergeTreeWriter implements RecordWriter<KeyValue>, MemoryOwner {
                         : kv.sequenceNumber();
         boolean success = writeBuffer.put(sequenceNumber, kv.valueKind(), kv.key(), kv.value());
         if (!success) {
-            flushWriteBuffer(true, false);
+            flushWriteBuffer(false, false);
             success = writeBuffer.put(sequenceNumber, kv.valueKind(), kv.key(), kv.value());
             if (!success) {
                 throw new RuntimeException("Mem table is too small to hold a single element.");

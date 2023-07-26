@@ -58,13 +58,21 @@ public class FixedBucketRowKeyExtractor extends RowKeyExtractor {
         if (sameBucketKeyAndTrimmedPrimaryKey) {
             return trimmedPrimaryKey();
         }
-        return bucketKeyProjection.apply(record);
+
+        if (reuseBucketKey == null) {
+            reuseBucketKey = bucketKeyProjection.apply(record);
+        }
+        return reuseBucketKey;
     }
 
     @Override
     public int bucket() {
         BinaryRow bucketKey = bucketKey();
-        return KeyAndBucketExtractor.bucket(
-                KeyAndBucketExtractor.bucketKeyHashCode(bucketKey), numBuckets);
+        if (reuseBucket == null) {
+            reuseBucket =
+                    KeyAndBucketExtractor.bucket(
+                            KeyAndBucketExtractor.bucketKeyHashCode(bucketKey), numBuckets);
+        }
+        return reuseBucket;
     }
 }
