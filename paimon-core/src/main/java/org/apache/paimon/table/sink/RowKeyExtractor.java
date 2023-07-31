@@ -30,11 +30,11 @@ public abstract class RowKeyExtractor implements KeyAndBucketExtractor<InternalR
     private final RowPartitionKeyExtractor partitionKeyExtractor;
     private final Projection logPrimaryKeyProjection;
 
-    protected InternalRow record;
+    protected volatile InternalRow record;
 
-    private BinaryRow partition;
-    private BinaryRow trimmedPrimaryKey;
-    private BinaryRow logPrimaryKey;
+    private volatile BinaryRow partition;
+    private volatile BinaryRow trimmedPrimaryKey;
+    private volatile BinaryRow logPrimaryKey;
 
     public RowKeyExtractor(TableSchema schema) {
         partitionKeyExtractor = new RowPartitionKeyExtractor(schema);
