@@ -16,4 +16,22 @@
  * limitations under the License.
  */
 
-{"data":null,"database":"paimon_sync_table","es":1683880506000,"id":2145,"isDdl":true,"mysqlType":null,"old":null,"pkNames":null,"sql":"/* Query from DMS-WEBSQL-0-Qid_30150719072767475G by user 1486767996652600 */ ALTER TABLE all_types_table DROP COLUMN v","sqlType":null,"table":"all_types_table","ts":1683880506424,"type":"ALTER"}
+package org.apache.paimon.format.orc;
+
+import org.apache.paimon.format.FileFormat;
+import org.apache.paimon.format.FormatReadWriteTest;
+import org.apache.paimon.format.avro.AvroFileFormat;
+import org.apache.paimon.options.Options;
+
+/** An orc {@link FormatReadWriteTest}. */
+public class OrcFormatReadWriteTest extends FormatReadWriteTest {
+
+    protected OrcFormatReadWriteTest() {
+        super("orc");
+    }
+
+    @Override
+    protected FileFormat fileFormat() {
+        return new AvroFileFormat(new Options());
+    }
+}

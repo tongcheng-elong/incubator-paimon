@@ -26,6 +26,8 @@ import org.apache.paimon.flink.sink.PrepareCommitOperator;
 import org.apache.paimon.flink.sink.StateUtils;
 import org.apache.paimon.flink.sink.StoreSinkWrite;
 import org.apache.paimon.flink.sink.StoreSinkWriteState;
+import org.apache.paimon.memory.HeapMemorySegmentPool;
+import org.apache.paimon.memory.MemoryPoolFactory;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.table.BucketMode;
 import org.apache.paimon.table.FileStoreTable;
@@ -54,9 +56,11 @@ public class CdcRecordStoreMultiWriteOperator
 
     private static final long serialVersionUID = 1L;
 
-    private final StoreSinkWrite.Provider storeSinkWriteProvider;
+    private final StoreSinkWrite.WithWriteBufferProvider storeSinkWriteProvider;
     private final String initialCommitUser;
     private final Catalog.Loader catalogLoader;
+
+    private MemoryPoolFactory memoryPoolFactory;
 
     protected Catalog catalog;
     protected Map<Identifier, FileStoreTable> tables;
@@ -66,7 +70,7 @@ public class CdcRecordStoreMultiWriteOperator
 
     public CdcRecordStoreMultiWriteOperator(
             Catalog.Loader catalogLoader,
-            StoreSinkWrite.Provider storeSinkWriteProvider,
+            StoreSinkWrite.WithWriteBufferProvider storeSinkWriteProvider,
             String initialCommitUser,
             Options options) {
         super(options);
@@ -104,8 +108,21 @@ public class CdcRecordStoreMultiWriteOperator
 
         FileStoreTable table = getTable(tableId);
 
-        // TODO memoryPool should not be null
         // TODO set executor service to write
+
+        // all table write should share one write buffer so that writers can preempt memory
+        // from those of other tables
+        if (memoryPoolFactory == null) {
+            memoryPoolFactory =
+                    new MemoryPoolFactory(
+                            memoryPool != null
+                                    ? memoryPool
+                                    // currently, the options of all tables are the same in CDC
+                                    : new HeapMemorySegmentPool(
+                                            table.coreOptions().writeBufferSize(),
+                                            table.coreOptions().pageSize()));
+        }
+
         StoreSinkWrite write =
                 writes.computeIfAbsent(
                         tableId,
@@ -115,7 +132,7 @@ public class CdcRecordStoreMultiWriteOperator
                                         commitUser,
                                         state,
                                         getContainingTask().getEnvironment().getIOManager(),
-                                        memoryPool));
+                                        memoryPoolFactory));
 
         Optional<GenericRow> optionalConverted =
                 toGenericRow(record.record(), table.schema().fields());

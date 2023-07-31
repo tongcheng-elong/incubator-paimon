@@ -20,6 +20,7 @@ package org.apache.paimon.flink.action.cdc.kafka.canal;
 
 import org.apache.paimon.flink.action.cdc.ComputedColumn;
 import org.apache.paimon.flink.action.cdc.TableNameConverter;
+import org.apache.paimon.flink.action.cdc.kafka.KafkaSchema;
 import org.apache.paimon.flink.action.cdc.mysql.MySqlTypeUtils;
 import org.apache.paimon.flink.sink.cdc.CdcRecord;
 import org.apache.paimon.flink.sink.cdc.RichCdcMultiplexRecord;
@@ -27,24 +28,17 @@ import org.apache.paimon.types.DataType;
 import org.apache.paimon.types.RowKind;
 import org.apache.paimon.utils.StringUtils;
 
+import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.databind.node.NullNode;
 
-import com.alibaba.druid.DbType;
-import com.alibaba.druid.sql.SQLUtils;
-import com.alibaba.druid.sql.ast.SQLStatement;
-import com.alibaba.druid.sql.ast.statement.SQLAlterTableAddColumn;
-import com.alibaba.druid.sql.ast.statement.SQLAlterTableDropColumnItem;
-import com.alibaba.druid.sql.ast.statement.SQLAlterTableItem;
-import com.alibaba.druid.sql.ast.statement.SQLAlterTableStatement;
-import com.alibaba.druid.sql.ast.statement.SQLColumnDefinition;
-import com.alibaba.druid.sql.dialect.mysql.ast.statement.MySqlAlterTableChangeColumn;
-import com.alibaba.druid.sql.dialect.mysql.ast.statement.MySqlAlterTableModifyColumn;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.util.Collector;
+
+import javax.annotation.Nullable;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -65,6 +59,7 @@ public class CanalRecordParser implements FlatMapFunction<String, RichCdcMultipl
     private static final String FIELD_TABLE = "table";
     private static final String FIELD_SQL = "sql";
     private static final String FIELD_MYSQL_TYPE = "mysqlType";
+    private static final String FIELD_PRIMARY_KEYS = "pkNames";
     private static final String FIELD_TYPE = "type";
     private static final String FIELD_DATA = "data";
     private static final String FIELD_OLD = "old";
@@ -104,10 +99,35 @@ public class CanalRecordParser implements FlatMapFunction<String, RichCdcMultipl
         root = objectMapper.readValue(value, JsonNode.class);
         validateFormat();
 
-        databaseName = root.get(FIELD_DATABASE).asText();
-        tableName = tableNameConverter.convert(root.get(FIELD_TABLE).asText());
+        databaseName = extractString(FIELD_DATABASE);
+        tableName = tableNameConverter.convert(extractString(FIELD_TABLE));
 
         extractRecords().forEach(out::collect);
+    }
+
+    @Nullable
+    public KafkaSchema getKafkaSchema(String record) {
+        try {
+            root = objectMapper.readValue(record, JsonNode.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+        validateFormat();
+
+        if (isDdl()) {
+            return null;
+        }
+
+        LinkedHashMap<String, String> mySqlFieldTypes = extractFieldTypesFromMySqlType();
+        LinkedHashMap<String, DataType> paimonFieldTypes = new LinkedHashMap<>();
+        mySqlFieldTypes.forEach(
+                (name, type) -> paimonFieldTypes.put(name, MySqlTypeUtils.toDataType(type)));
+
+        return new KafkaSchema(
+                extractString(FIELD_DATABASE),
+                extractString(FIELD_TABLE),
+                paimonFieldTypes,
+                extractPrimaryKeys());
     }
 
     private void validateFormat() {
@@ -124,7 +144,12 @@ public class CanalRecordParser implements FlatMapFunction<String, RichCdcMultipl
             checkNotNull(root.get(FIELD_SQL), errorMessageTemplate, FIELD_SQL);
         } else {
             checkNotNull(root.get(FIELD_MYSQL_TYPE), errorMessageTemplate, FIELD_MYSQL_TYPE);
+            checkNotNull(root.get(FIELD_PRIMARY_KEYS), errorMessageTemplate, FIELD_PRIMARY_KEYS);
         }
+    }
+
+    private String extractString(String key) {
+        return root.get(key).asText();
     }
 
     private boolean isDdl() {
@@ -133,18 +158,20 @@ public class CanalRecordParser implements FlatMapFunction<String, RichCdcMultipl
 
     private List<RichCdcMultiplexRecord> extractRecords() {
         if (isDdl()) {
-            return extractRecordsFromDdl();
+            return Collections.emptyList();
         }
+
+        List<String> primaryKeys = extractPrimaryKeys();
 
         // extract field types
         LinkedHashMap<String, String> mySqlFieldTypes = extractFieldTypesFromMySqlType();
         LinkedHashMap<String, DataType> paimonFieldTypes = new LinkedHashMap<>();
         mySqlFieldTypes.forEach(
-                (name, type) -> paimonFieldTypes.put(name, toPaimonDataType(type, true)));
+                (name, type) -> paimonFieldTypes.put(name, MySqlTypeUtils.toDataType(type)));
 
         // extract row kind and field values
         List<RichCdcMultiplexRecord> records = new ArrayList<>();
-        String type = root.get(FIELD_TYPE).asText();
+        String type = extractString(FIELD_TYPE);
         ArrayNode data = (ArrayNode) root.get(FIELD_DATA);
         switch (type) {
             case OP_UPDATE:
@@ -167,18 +194,20 @@ public class CanalRecordParser implements FlatMapFunction<String, RichCdcMultipl
                         before = caseSensitive ? before : keyCaseInsensitive(before);
                         records.add(
                                 new RichCdcMultiplexRecord(
-                                        new CdcRecord(RowKind.DELETE, before),
-                                        paimonFieldTypes,
                                         databaseName,
-                                        tableName));
+                                        tableName,
+                                        paimonFieldTypes,
+                                        primaryKeys,
+                                        new CdcRecord(RowKind.DELETE, before)));
                     }
                     after = caseSensitive ? after : keyCaseInsensitive(after);
                     records.add(
                             new RichCdcMultiplexRecord(
-                                    new CdcRecord(RowKind.INSERT, after),
-                                    paimonFieldTypes,
                                     databaseName,
-                                    tableName));
+                                    tableName,
+                                    paimonFieldTypes,
+                                    primaryKeys,
+                                    new CdcRecord(RowKind.INSERT, after)));
                 }
                 break;
             case OP_INSERT:
@@ -190,10 +219,11 @@ public class CanalRecordParser implements FlatMapFunction<String, RichCdcMultipl
                     RowKind kind = type.equals(OP_INSERT) ? RowKind.INSERT : RowKind.DELETE;
                     records.add(
                             new RichCdcMultiplexRecord(
-                                    new CdcRecord(kind, after),
-                                    paimonFieldTypes,
                                     databaseName,
-                                    tableName));
+                                    tableName,
+                                    paimonFieldTypes,
+                                    primaryKeys,
+                                    new CdcRecord(kind, after)));
                 }
                 break;
             default:
@@ -203,77 +233,15 @@ public class CanalRecordParser implements FlatMapFunction<String, RichCdcMultipl
         return records;
     }
 
-    private List<RichCdcMultiplexRecord> extractRecordsFromDdl() {
-        String sql = root.get(FIELD_SQL).asText();
-        if (StringUtils.isEmpty(sql)) {
-            return Collections.emptyList();
-        }
-
-        LinkedHashMap<String, DataType> fieldTypes = new LinkedHashMap<>();
-        SQLStatement sqlStatement = SQLUtils.parseSingleStatement(sql, DbType.mysql);
-
-        if (sqlStatement instanceof SQLAlterTableStatement) {
-            SQLAlterTableStatement sqlAlterTableStatement = (SQLAlterTableStatement) sqlStatement;
-            for (SQLAlterTableItem sqlAlterTableItem : sqlAlterTableStatement.getItems()) {
-                extractFieldTypesFromAlterTableItem(sqlAlterTableItem, fieldTypes);
-            }
-        }
-
-        return Collections.singletonList(
-                new RichCdcMultiplexRecord(
-                        CdcRecord.emptyRecord(), fieldTypes, databaseName, tableName));
-    }
-
-    private void extractFieldTypesFromAlterTableItem(
-            SQLAlterTableItem sqlAlterTableItem, LinkedHashMap<String, DataType> fieldTypes) {
-        if (sqlAlterTableItem instanceof SQLAlterTableAddColumn) {
-            SQLAlterTableAddColumn sqlAlterTableAddColumn =
-                    (SQLAlterTableAddColumn) sqlAlterTableItem;
-            List<SQLColumnDefinition> columns = sqlAlterTableAddColumn.getColumns();
-
-            for (SQLColumnDefinition column : columns) {
-                fieldTypes.put(getColumnName(column), getPaimonDataType(column));
-            }
-        } else if (sqlAlterTableItem instanceof SQLAlterTableDropColumnItem) {
-            // ignore
-        } else if (sqlAlterTableItem instanceof MySqlAlterTableModifyColumn) {
-            MySqlAlterTableModifyColumn mySqlAlterTableModifyColumn =
-                    (MySqlAlterTableModifyColumn) sqlAlterTableItem;
-            SQLColumnDefinition newColumnDefinition =
-                    mySqlAlterTableModifyColumn.getNewColumnDefinition();
-
-            fieldTypes.put(
-                    getColumnName(newColumnDefinition), getPaimonDataType(newColumnDefinition));
-        } else if (sqlAlterTableItem instanceof MySqlAlterTableChangeColumn) {
-            MySqlAlterTableChangeColumn mySqlAlterTableChangeColumn =
-                    (MySqlAlterTableChangeColumn) sqlAlterTableItem;
-            SQLColumnDefinition newColumnDefinition =
-                    mySqlAlterTableChangeColumn.getNewColumnDefinition();
-
-            fieldTypes.put(
-                    getColumnName(newColumnDefinition), getPaimonDataType(newColumnDefinition));
-        } else {
-            throw new UnsupportedOperationException(
-                    "Unsupported ALTER TABLE type: "
-                            + sqlAlterTableItem.getClass().getSimpleName());
-        }
-    }
-
-    private String getColumnName(SQLColumnDefinition column) {
-        return toFieldName(StringUtils.replace(column.getColumnName(), "`", ""));
-    }
-
-    private DataType getPaimonDataType(SQLColumnDefinition column) {
-        return toPaimonDataType(
-                column.getDataType().toString(), !column.containsNotNullConstaint());
-    }
-
     private String toFieldName(String rawName) {
         return StringUtils.caseSensitiveConversion(rawName, caseSensitive);
     }
 
-    private DataType toPaimonDataType(String mySqlType, boolean isNullable) {
-        return MySqlTypeUtils.toDataType(mySqlType).copy(isNullable);
+    private List<String> extractPrimaryKeys() {
+        List<String> primaryKeys = new ArrayList<>();
+        ArrayNode pkNames = (ArrayNode) root.get(FIELD_PRIMARY_KEYS);
+        pkNames.iterator().forEachRemaining(pk -> primaryKeys.add(toFieldName(pk.asText())));
+        return primaryKeys;
     }
 
     private LinkedHashMap<String, String> extractFieldTypesFromMySqlType() {

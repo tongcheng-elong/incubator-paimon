@@ -32,6 +32,11 @@ Just like all other tables, Paimon tables can be queried with `SELECT` statement
 
 Paimon's batch read returns all the data in a snapshot of the table. By default, batch reads return the latest snapshot.
 
+```sql
+-- Flink SQL
+SET 'execution.runtime-mode' = 'batch';
+```
+
 ### Batch Time Travel
 
 Paimon batch reads with time travel can specify a snapshot or a tag and read the corresponding data.
@@ -111,6 +116,14 @@ SELECT * FROM t;
 
 {{< /tab >}}
 
+{{< tab "Hive" >}}
+```sql
+SET paimon.scan.timestamp-millis=1679486589444;
+SELECT * FROM t;
+SET paimon.scan.timestamp-millis=null;
+```
+{{< /tab >}}
+
 {{< /tabs >}}
 
 ### Batch Incremental
@@ -161,6 +174,14 @@ spark.read()
 
 {{< /tab >}}
 
+{{< tab "Hive" >}}
+```sql
+SET paimon.incremental-between='12,20';
+SELECT * FROM t;
+SET paimon.incremental-between=null;
+```
+{{< /tab >}}
+
 {{< /tabs >}}
 
 In Batch SQL, the `DELETE` records are not allowed to be returned, so records of `-D` will be dropped.
@@ -181,6 +202,11 @@ and continue to read the latest changes.
 
 Paimon by default ensures that your startup is properly processed with the full amount
 included.
+
+```sql
+-- Flink SQL
+SET 'execution.runtime-mode' = 'streaming';
+```
 
 You can also do streaming read without the snapshot data, you can use `latest` scan mode:
 
@@ -242,6 +268,34 @@ When stream read Paimon tables, the next snapshot id to be recorded into the fil
 NOTE: The consumer will prevent expiration of the snapshot. You can specify 'consumer.expiration-time' to manage the 
 lifetime of consumers.
 {{< /hint >}}
+
+You can reset a consumer with a given consumer ID and next snapshot ID.
+
+{{< hint info >}}
+First, you need to stop the streaming task using this consumer ID, and then execute the reset consumer action job.
+{{< /hint >}}
+
+{{< tabs "reset-consumer" >}}
+
+{{< tab "Flink" >}}
+
+Run the following command:
+
+```bash
+<FLINK_HOME>/bin/flink run \
+    /path/to/paimon-flink-action-{{< version >}}.jar \
+    reset-consumer \
+    --warehouse <warehouse-path> \
+    --database <database-name> \ 
+    --table <table-name> \
+    --consumer-id <consumer-id> \
+    --next-snapshot <next-snapshot-id> \
+    [--catalog-conf <paimon-catalog-conf> [--catalog-conf <paimon-catalog-conf> ...]]
+```
+
+{{< /tab >}}
+
+{{< /tabs >}}
 
 ## Query Optimization
 

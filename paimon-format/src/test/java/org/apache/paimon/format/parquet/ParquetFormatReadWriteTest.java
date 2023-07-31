@@ -16,19 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.paimon.flink.action.cdc.mysql;
+package org.apache.paimon.format.parquet;
 
-import java.io.Serializable;
+import org.apache.paimon.format.FileFormat;
+import org.apache.paimon.format.FileFormatFactory;
+import org.apache.paimon.format.FormatReadWriteTest;
+import org.apache.paimon.options.Options;
 
-/**
- * There are two modes for database sync.
- *
- * <p>1) SEPARATE mode, start a sink for each table, the synchronization of the new table requires
- * restarting the job.
- *
- * <p>2) UNIFIED mode, start a unified sink, the new table will be automatically synchronized.
- */
-public enum MySqlDatabaseSyncMode implements Serializable {
-    SEPARATE,
-    UNIFIED
+/** A parquet {@link FormatReadWriteTest}. */
+public class ParquetFormatReadWriteTest extends FormatReadWriteTest {
+
+    protected ParquetFormatReadWriteTest() {
+        super("parquet");
+    }
+
+    @Override
+    protected FileFormat fileFormat() {
+        return new ParquetFileFormat(new FileFormatFactory.FormatContext(new Options(), 1024));
+    }
 }
