@@ -34,8 +34,8 @@ public class FixedBucketRowKeyExtractor extends RowKeyExtractor {
     private final boolean sameBucketKeyAndTrimmedPrimaryKey;
     private final Projection bucketKeyProjection;
 
-    private BinaryRow reuseBucketKey;
-    private Integer reuseBucket;
+    private volatile BinaryRow reuseBucketKey;
+    private volatile Integer reuseBucket;
 
     public FixedBucketRowKeyExtractor(TableSchema schema) {
         super(schema);
