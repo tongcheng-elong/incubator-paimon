@@ -89,7 +89,7 @@ public class KafkaSyncDatabaseAction extends ActionBase {
     @Nullable private final Pattern excludingPattern;
     private final Map<String, String> tableConfig;
 
-    KafkaSyncDatabaseAction(
+    public KafkaSyncDatabaseAction(
             Map<String, String> kafkaConfig,
             String warehouse,
             String database,
@@ -98,7 +98,7 @@ public class KafkaSyncDatabaseAction extends ActionBase {
         this(kafkaConfig, warehouse, database, null, null, null, null, catalogConfig, tableConfig);
     }
 
-    KafkaSyncDatabaseAction(
+    public KafkaSyncDatabaseAction(
             Map<String, String> kafkaConfig,
             String warehouse,
             String database,
@@ -134,7 +134,7 @@ public class KafkaSyncDatabaseAction extends ActionBase {
 
         catalog.createDatabase(database, true);
         TableNameConverter tableNameConverter =
-                new TableNameConverter(caseSensitive, tablePrefix, tableSuffix);
+                new TableNameConverter(caseSensitive, true, tablePrefix, tableSuffix);
 
         KafkaSource<String> source = KafkaActionUtils.buildKafkaSource(kafkaConfig);
 

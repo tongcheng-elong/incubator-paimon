@@ -181,6 +181,9 @@ public class HiveCatalog extends AbstractCatalog {
 
     @Override
     public boolean databaseExists(String databaseName) {
+        if (isSystemDatabase(databaseName)) {
+            return true;
+        }
         try {
             client.getDatabase(databaseName);
             return true;
@@ -195,6 +198,9 @@ public class HiveCatalog extends AbstractCatalog {
     @Override
     public void createDatabase(String name, boolean ignoreIfExists)
             throws DatabaseAlreadyExistException {
+        if (isSystemDatabase(name)) {
+            throw new ProcessSystemDatabaseException();
+        }
         try {
             client.createDatabase(convertToDatabase(name));
 
@@ -211,6 +217,9 @@ public class HiveCatalog extends AbstractCatalog {
     @Override
     public void dropDatabase(String name, boolean ignoreIfNotExists, boolean cascade)
             throws DatabaseNotExistException, DatabaseNotEmptyException {
+        if (isSystemDatabase(name)) {
+            throw new ProcessSystemDatabaseException();
+        }
         try {
             if (!cascade && client.getAllTables(name).size() > 0) {
                 throw new DatabaseNotEmptyException(name);
@@ -229,6 +238,9 @@ public class HiveCatalog extends AbstractCatalog {
 
     @Override
     public List<String> listTables(String databaseName) throws DatabaseNotExistException {
+        if (isSystemDatabase(databaseName)) {
+            return GLOBAL_TABLES;
+        }
         try {
             return client.getAllTables(databaseName).stream()
                     .filter(
@@ -323,10 +335,10 @@ public class HiveCatalog extends AbstractCatalog {
                     e);
         }
         Table table = newHmsTable(identifier);
-        updateHmsTable(table, identifier, tableSchema);
         try {
+            updateHmsTable(table, identifier, tableSchema);
             client.createTable(table);
-        } catch (TException e) {
+        } catch (Exception e) {
             Path path = super.getDataTableLocation(identifier);
             try {
                 fileIO.deleteDirectoryQuietly(path);
@@ -393,7 +405,7 @@ public class HiveCatalog extends AbstractCatalog {
             Table table = client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
             updateHmsTable(table, identifier, schema);
             client.alter_table(identifier.getDatabaseName(), identifier.getObjectName(), table);
-        } catch (TException te) {
+        } catch (Exception te) {
             schemaManager.deleteSchema(schema.id());
             throw new RuntimeException(te);
         }
