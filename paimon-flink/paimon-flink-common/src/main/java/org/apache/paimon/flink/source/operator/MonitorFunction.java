@@ -18,6 +18,7 @@
 
 package org.apache.paimon.flink.source.operator;
 
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.paimon.flink.utils.JavaTypeInfo;
 import org.apache.paimon.table.source.DataSplit;
 import org.apache.paimon.table.source.EndOfScanException;
@@ -45,11 +46,7 @@ import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.NavigableMap;
-import java.util.OptionalLong;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * This is the single (non-parallel) monitoring task, it is responsible for:
@@ -230,6 +227,14 @@ public class MonitorFunction extends RichSourceFunction<Split>
             ReadBuilder readBuilder,
             long monitorInterval,
             boolean emitSnapshotWatermark) {
+        KeySelector<Split, Integer> keySelector = split -> {
+          if (Objects.nonNull(((DataSplit) split).partition())) {
+            return Math.abs(((DataSplit) split).partition().hashCode()) + ((DataSplit) split).bucket();
+          } else {
+            return ((DataSplit) split).bucket();
+          }
+        };
+
         return env.addSource(
                         new MonitorFunction(readBuilder, monitorInterval, emitSnapshotWatermark),
                         name + "-Monitor",
@@ -237,7 +242,7 @@ public class MonitorFunction extends RichSourceFunction<Split>
                 .forceNonParallel()
                 .partitionCustom(
                         (key, numPartitions) -> key % numPartitions,
-                        split -> ((DataSplit) split).bucket())
+                        keySelector)
                 .transform(name + "-Reader", typeInfo, new ReadOperator(readBuilder));
     }
 }
