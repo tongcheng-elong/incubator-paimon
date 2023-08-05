@@ -40,6 +40,7 @@ public class FixedBucketRowKeyExtractor extends RowKeyExtractor {
     public FixedBucketRowKeyExtractor(TableSchema schema) {
         super(schema);
         numBuckets = new CoreOptions(schema.options()).bucket();
+        System.out.println("init numBuckets :" + numBuckets);
         checkArgument(numBuckets > 0, "Num bucket is illegal: " + numBuckets);
         sameBucketKeyAndTrimmedPrimaryKey = schema.bucketKeys().equals(schema.trimmedPrimaryKeys());
         bucketKeyProjection =
@@ -49,30 +50,22 @@ public class FixedBucketRowKeyExtractor extends RowKeyExtractor {
 
     @Override
     public void setRecord(InternalRow record) {
-        super.setRecord(record);
         this.reuseBucketKey = null;
         this.reuseBucket = null;
+        super.setRecord(record);
     }
 
     private BinaryRow bucketKey() {
         if (sameBucketKeyAndTrimmedPrimaryKey) {
             return trimmedPrimaryKey();
         }
-
-        if (reuseBucketKey == null) {
-            reuseBucketKey = bucketKeyProjection.apply(record);
-        }
-        return reuseBucketKey;
+        return bucketKeyProjection.apply(record);
     }
 
     @Override
     public int bucket() {
         BinaryRow bucketKey = bucketKey();
-        if (reuseBucket == null) {
-            reuseBucket =
-                    KeyAndBucketExtractor.bucket(
-                            KeyAndBucketExtractor.bucketKeyHashCode(bucketKey), numBuckets);
-        }
-        return reuseBucket;
+        return KeyAndBucketExtractor.bucket(
+                KeyAndBucketExtractor.bucketKeyHashCode(bucketKey), 300);
     }
 }
