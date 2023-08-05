@@ -45,20 +45,26 @@ public abstract class RowKeyExtractor implements KeyAndBucketExtractor<InternalR
 
     @Override
     public void setRecord(InternalRow record) {
+        this.record = record;
         this.partition = null;
         this.trimmedPrimaryKey = null;
         this.logPrimaryKey = null;
-        this.record = record;
     }
 
     @Override
     public BinaryRow partition() {
-        return partitionKeyExtractor.partition(record);
+        if (partition == null) {
+            partition = partitionKeyExtractor.partition(record);
+        }
+        return partition;
     }
 
     @Override
     public BinaryRow trimmedPrimaryKey() {
-        return partitionKeyExtractor.trimmedPrimaryKey(record);
+        if (trimmedPrimaryKey == null) {
+            trimmedPrimaryKey = partitionKeyExtractor.trimmedPrimaryKey(record);
+        }
+        return trimmedPrimaryKey;
     }
 
     @Override

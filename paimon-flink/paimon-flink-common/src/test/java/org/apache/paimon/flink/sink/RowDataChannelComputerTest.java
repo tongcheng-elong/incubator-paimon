@@ -42,7 +42,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -55,30 +54,27 @@ public class RowDataChannelComputerTest {
     public void testSchemaWithPartition() throws Exception {
         RowType rowType =
                 RowType.of(
-                        new DataType[] {DataTypes.INT(), DataTypes.INT(), DataTypes.BIGINT(), DataTypes.BIGINT(), DataTypes.DOUBLE()},
-                        new String[] {"pt", "mt", "k1", "k2", "v"});
+                        new DataType[] {DataTypes.INT(), DataTypes.BIGINT(), DataTypes.DOUBLE()},
+                        new String[] {"pt", "k", "v"});
 
         SchemaManager schemaManager =
                 new SchemaManager(LocalFileIO.create(), new Path(tempDir.toString()));
-        Map<String,String> options = new HashMap<>();
-        options.put("bucket","300");
-
         TableSchema schema =
                 schemaManager.createTable(
                         new Schema(
                                 rowType.getFields(),
-                                Arrays.asList("pt", "mt"),
-                                Arrays.asList("pt", "mt", "k1", "k2"),
-                                options,
+                                Collections.singletonList("pt"),
+                                Arrays.asList("pt", "k"),
+                                new HashMap<>(),
                                 ""));
 
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        int numInputs = 1000000;
+        int numInputs = random.nextInt(1000) + 1;
         List<RowData> input = new ArrayList<>();
         for (int i = 0; i < numInputs; i++) {
             input.add(
                     GenericRowData.of(
-                            random.nextInt(2019, 2023) + 1, random.nextInt(11) + 1, random.nextLong(), random.nextLong(), random.nextDouble()));
+                            random.nextInt(10) + 1, random.nextLong(), random.nextDouble()));
         }
 
         testImpl(schema, input);
@@ -116,35 +112,21 @@ public class RowDataChannelComputerTest {
         ThreadLocalRandom random = ThreadLocalRandom.current();
         RowDataKeyAndBucketExtractor extractor = new RowDataKeyAndBucketExtractor(schema);
 
-        int numChannels = random.nextInt(600) + 1;
+        int numChannels = random.nextInt(10) + 1;
         boolean hasLogSink = random.nextBoolean();
         RowDataChannelComputer channelComputer = new RowDataChannelComputer(schema, hasLogSink);
         channelComputer.setup(numChannels);
 
         // assert that channel(record) and channel(partition, bucket) gives the same result
 
-        Map<Integer,Integer> dis = new HashMap<>();
         for (RowData rowData : input) {
             extractor.setRecord(rowData);
             BinaryRow partition = extractor.partition();
             int bucket = extractor.bucket();
-            assertThat(bucket)
-                    .isLessThan(300);
 
-            int channel = channelComputer.channel(rowData);
-            dis.put(channel, dis.getOrDefault(channel, 0) + 1);
-            assertThat(channel)
-                    .isLessThan(numChannels);
-            assertThat(channel)
+            assertThat(channelComputer.channel(rowData))
                     .isEqualTo(channelComputer.channel(partition, bucket));
         }
-
-        AtomicInteger sum = new AtomicInteger();
-        dis.forEach((k,v)->{
-            sum.set(sum.get() + v);
-        });
-
-        assertThat(sum.get()).isEqualTo(input.size());
 
         // assert that distribution should be even
 

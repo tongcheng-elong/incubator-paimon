@@ -52,7 +52,7 @@ public class RowDataChannelComputer implements ChannelComputer<RowData> {
     }
 
     @Override
-    public synchronized int channel(RowData record) {
+    public int channel(RowData record) {
         extractor.setRecord(record);
         return channel(extractor.partition(), extractor.bucket());
     }
@@ -61,8 +61,8 @@ public class RowDataChannelComputer implements ChannelComputer<RowData> {
         // log sinks like Kafka only consider bucket and don't care about partition
         // so same bucket, even from different partition, must go to the same channel
         return hasLogSink
-                ? ChannelComputer.select(bucket, 300)
-                : ChannelComputer.select(partition, bucket, 300);
+                ? ChannelComputer.select(bucket, numChannels)
+                : ChannelComputer.select(partition, bucket, numChannels);
     }
 
     @Override
