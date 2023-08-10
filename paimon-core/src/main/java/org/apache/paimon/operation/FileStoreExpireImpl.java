@@ -50,7 +50,7 @@ public class FileStoreExpireImpl implements FileStoreExpire {
     // snapshots exceeding any constraint will be expired
     private final int numRetainedMax;
     private final long millisRetained;
-
+    private final int cleanLimit;
     private final SnapshotManager snapshotManager;
     private final ConsumerManager consumerManager;
     private final SnapshotDeletion snapshotDeletion;
@@ -63,12 +63,14 @@ public class FileStoreExpireImpl implements FileStoreExpire {
             int numRetainedMin,
             int numRetainedMax,
             long millisRetained,
+            int cleanLimit,
             SnapshotManager snapshotManager,
             SnapshotDeletion snapshotDeletion,
             TagFileKeeper tagFileKeeper) {
         this.numRetainedMin = numRetainedMin;
         this.numRetainedMax = numRetainedMax;
         this.millisRetained = millisRetained;
+        this.cleanLimit = cleanLimit;
         this.snapshotManager = snapshotManager;
         this.consumerManager =
                 new ConsumerManager(snapshotManager.fileIO(), snapshotManager.tablePath());
@@ -133,6 +135,13 @@ public class FileStoreExpireImpl implements FileStoreExpire {
             // fast exit
             return;
         }
+
+        // calculates the maximum expired snapshot id
+        // we should not expire too many snapshots at once, because this will block checkpoint,
+        // and in the case of too many expired snapshots, it may cause checkpoint timeout
+        LOG.debug("endExclusiveId_before:\t" + endExclusiveId);
+        endExclusiveId = earliestId + Math.min(endExclusiveId - earliestId, cleanLimit);
+        LOG.debug("endExclusiveId_after:\t" + endExclusiveId);
 
         // find first snapshot to expire
         long beginInclusiveId = earliestId;
