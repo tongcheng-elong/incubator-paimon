@@ -143,18 +143,18 @@ public class RowDataStoreWriteOperator extends TableWriteOperator<RowData> {
     public void processElement(StreamRecord<RowData> element) throws Exception {
         sinkContext.timestamp = element.hasTimestamp() ? element.getTimestamp() : null;
 
-        SinkRecord record;
-        try {
-            record = write.write(new FlinkRowWrapper(element.getValue()));
-        } catch (Exception e) {
-            throw new IOException(e);
-        }
-
-        if (logSinkFunction != null) {
-            // write to log store, need to preserve original pk (which includes partition fields)
-            SinkRecord logRecord = write.toLogRecord(record);
-            logSinkFunction.invoke(logRecord, sinkContext);
-        }
+//        SinkRecord record;
+//        try {
+//            record = write.write(new FlinkRowWrapper(element.getValue()));
+//        } catch (Exception e) {
+//            throw new IOException(e);
+//        }
+//
+//        if (logSinkFunction != null) {
+//            // write to log store, need to preserve original pk (which includes partition fields)
+//            SinkRecord logRecord = write.toLogRecord(record);
+//            logSinkFunction.invoke(logRecord, sinkContext);
+//        }
     }
 
     @Override
