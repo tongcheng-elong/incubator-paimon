@@ -313,6 +313,29 @@ public class SparkReadITCase extends SparkReadTestBase {
     }
 
     @Test
+    public void testChangelogProducerOnAppendOnlyTable() {
+        assertThatThrownBy(
+                        () ->
+                                spark.sql(
+                                        "CREATE TABLE T (a INT) TBLPROPERTIES ('changelog-producer' = 'input')"))
+                .getRootCause()
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessage(
+                        "Can not set changelog-producer on table without primary keys, please define primary keys.");
+
+        spark.sql("CREATE TABLE T (a INT)");
+
+        assertThatThrownBy(
+                        () ->
+                                spark.sql(
+                                        "ALTER TABLE T SET TBLPROPERTIES('changelog-producer' 'input')"))
+                .getRootCause()
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessage(
+                        "Can not set changelog-producer on table without primary keys, please define primary keys.");
+    }
+
+    @Test
     public void testCreateTableWithNullablePk() {
         spark.sql(
                 "CREATE TABLE PkTable (\n"
@@ -380,22 +403,6 @@ public class SparkReadITCase extends SparkReadTestBase {
                                 .map(Row::toString)
                                 .collect(Collectors.toList()))
                 .contains("[k1,v1]", "[k2,v2]");
-    }
-
-    @Test
-    public void testCreateTableWithInvalidPk() {
-        assertThatThrownBy(
-                        () ->
-                                spark.sql(
-                                        "CREATE TABLE PartitionedPkTable (\n"
-                                                + "a BIGINT,\n"
-                                                + "b STRING,\n"
-                                                + "c DOUBLE)\n"
-                                                + "PARTITIONED BY (b)\n"
-                                                + "TBLPROPERTIES ('primary-key' = 'a')"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining(
-                        "Primary key constraint [a] should include all partition fields [b]");
     }
 
     @Test

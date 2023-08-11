@@ -113,6 +113,7 @@ public abstract class AbstractFileStoreTable implements FileStoreTable {
             case FIXED:
                 return new FixedBucketRowKeyExtractor(schema());
             case DYNAMIC:
+            case GLOBAL_DYNAMIC:
                 return new DynamicBucketRowKeyExtractor(schema());
             case UNAWARE:
                 return new UnawareBucketRowKeyExtractor(schema());

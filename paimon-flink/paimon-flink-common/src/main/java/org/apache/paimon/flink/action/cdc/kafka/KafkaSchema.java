@@ -32,17 +32,20 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 
+import static org.apache.paimon.flink.action.cdc.kafka.KafkaActionUtils.kafkaPropertiesGroupId;
+
 /** Utility class to load canal kafka schema. */
 public class KafkaSchema {
 
-    private static final int MAX_RETRY = 100;
-
+    private static final int MAX_RETRY = 5;
+    private static final int POLL_TIMEOUT_MILLIS = 1000;
     private final String databaseName;
     private final String tableName;
     private final Map<String, DataType> fields;
@@ -81,9 +84,7 @@ public class KafkaSchema {
         props.put(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 kafkaConfig.get(KafkaConnectorOptions.PROPS_BOOTSTRAP_SERVERS));
-        props.put(
-                ConsumerConfig.GROUP_ID_CONFIG,
-                kafkaConfig.get(KafkaConnectorOptions.PROPS_GROUP_ID));
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, kafkaPropertiesGroupId(kafkaConfig));
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
@@ -99,7 +100,10 @@ public class KafkaSchema {
         }
         int firstPartition =
                 partitionInfos.stream().map(PartitionInfo::partition).sorted().findFirst().get();
-        consumer.assign(Collections.singletonList(new TopicPartition(topic, firstPartition)));
+        Collection<TopicPartition> topicPartitions =
+                Collections.singletonList(new TopicPartition(topic, firstPartition));
+        consumer.assign(topicPartitions);
+        consumer.seekToBeginning(topicPartitions);
 
         return consumer;
     }
@@ -107,10 +111,11 @@ public class KafkaSchema {
     public static KafkaSchema getKafkaSchema(Configuration kafkaConfig, String topic)
             throws Exception {
         KafkaConsumer<String, String> consumer = getKafkaEarliestConsumer(kafkaConfig, topic);
-
         int retry = 0;
+        int retryInterval = 1000;
         while (true) {
-            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+            ConsumerRecords<String, String> records =
+                    consumer.poll(Duration.ofMillis(POLL_TIMEOUT_MILLIS));
             for (ConsumerRecord<String, String> record : records) {
                 String format = kafkaConfig.get(KafkaConnectorOptions.VALUE_FORMAT);
                 if ("canal-json".equals(format)) {
@@ -125,9 +130,11 @@ public class KafkaSchema {
                 }
             }
             if (retry == MAX_RETRY) {
-                throw new Exception("Could not get metadata from server,topic :" + topic);
+                throw new Exception(
+                        String.format("Could not get metadata from server,topic:%s", topic));
             }
-            Thread.sleep(100);
+            Thread.sleep(retryInterval);
+            retryInterval *= 2;
             retry++;
         }
     }

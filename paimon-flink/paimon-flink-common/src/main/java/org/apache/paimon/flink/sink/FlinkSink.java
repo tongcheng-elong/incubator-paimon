@@ -159,7 +159,7 @@ public abstract class FlinkSink<T> implements Serializable {
             }
         }
 
-        Boolean writeOnly = table.coreOptions().writeOnly();
+        boolean writeOnly = table.coreOptions().writeOnly();
         SingleOutputStreamOperator<Committable> written =
                 input.transform(
                                 (writeOnly ? WRITER_WRITE_ONLY_NAME : WRITER_NAME)

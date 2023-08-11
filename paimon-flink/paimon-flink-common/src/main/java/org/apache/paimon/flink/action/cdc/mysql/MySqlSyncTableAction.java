@@ -38,12 +38,14 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.apache.paimon.flink.action.cdc.ComputedColumnUtils.buildComputedColumns;
 import static org.apache.paimon.flink.action.cdc.mysql.MySqlActionUtils.MYSQL_CONVERTER_TINYINT1_BOOL;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
@@ -135,22 +137,25 @@ public class MySqlSyncTableAction extends ActionBase {
                 String.format(
                         "mysql-conf [%s] must be specified.", MySqlSourceOptions.TABLE_NAME.key()));
 
-        String tableList =
-                mySqlConfig.get(MySqlSourceOptions.DATABASE_NAME)
-                        + "\\."
-                        + mySqlConfig.get(MySqlSourceOptions.TABLE_NAME);
-        MySqlSource<String> source = MySqlActionUtils.buildMySqlSource(mySqlConfig, tableList);
-
         boolean caseSensitive = catalog.caseSensitive();
 
         if (!caseSensitive) {
             validateCaseInsensitive();
         }
 
-        MySqlSchema mySqlSchema =
+        List<MySqlSchema> mySqlSchemaList =
                 MySqlActionUtils.getMySqlSchemaList(
-                                mySqlConfig, monitorTablePredication(), new ArrayList<>())
-                        .stream()
+                        mySqlConfig, monitorTablePredication(), new ArrayList<>());
+
+        String tableList =
+                mySqlSchemaList.stream()
+                        .map(m -> m.identifier().getDatabaseName() + "." + m.tableName())
+                        .collect(Collectors.joining("|"));
+
+        MySqlSource<String> source = MySqlActionUtils.buildMySqlSource(mySqlConfig, tableList);
+
+        MySqlSchema mySqlSchema =
+                mySqlSchemaList.stream()
                         .reduce(MySqlSchema::merge)
                         .orElseThrow(
                                 () ->
@@ -162,8 +167,7 @@ public class MySqlSyncTableAction extends ActionBase {
         Identifier identifier = new Identifier(database, table);
         FileStoreTable table;
         List<ComputedColumn> computedColumns =
-                MySqlActionUtils.buildComputedColumns(
-                        computedColumnArgs, mySqlSchema.typeMapping());
+                buildComputedColumns(computedColumnArgs, mySqlSchema.typeMapping());
         Schema fromMySql =
                 MySqlActionUtils.buildPaimonSchema(
                         mySqlSchema,
@@ -181,7 +185,7 @@ public class MySqlSyncTableAction extends ActionBase {
                                 .collect(Collectors.toList());
                 List<String> fieldNames = table.schema().fieldNames();
                 checkArgument(
-                        fieldNames.containsAll(computedFields),
+                        new HashSet<>(fieldNames).containsAll(computedFields),
                         " Exists Table should contain all computed columns %s, but are %s.",
                         computedFields,
                         fieldNames);

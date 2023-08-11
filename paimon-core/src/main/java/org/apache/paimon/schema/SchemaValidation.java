@@ -92,6 +92,15 @@ public class SchemaValidation {
                             WRITE_MODE.key(), APPEND_ONLY, CHANGELOG_PRODUCER.key()));
         }
 
+        if (options.writeMode() == WriteMode.AUTO
+                && schema.primaryKeys().isEmpty()
+                && changelogProducer != ChangelogProducer.NONE) {
+            throw new UnsupportedOperationException(
+                    String.format(
+                            "Can not set %s on table without primary keys, please define primary keys.",
+                            CHANGELOG_PRODUCER.key()));
+        }
+
         checkArgument(
                 options.snapshotNumRetainMin() > 0,
                 SNAPSHOT_NUM_RETAINED_MIN.key() + " should be at least 1");
@@ -184,6 +193,14 @@ public class SchemaValidation {
                 throw new IllegalArgumentException(
                         "Only support 'lookup' changelog-producer on FIRST_MERGE merge engine");
             }
+        }
+
+        if (schema.crossPartitionUpdate() && options.bucket() != -1) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "You should use dynamic bucket (bucket = -1) mode in cross partition update case "
+                                    + "(Primary key constraint %s not include all partition fields %s).",
+                            schema.primaryKeys(), schema.partitionKeys()));
         }
     }
 
