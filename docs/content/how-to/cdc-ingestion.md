@@ -64,6 +64,7 @@ To use this feature through `flink run`, run the following shell command.
     --table <table-name> \
     [--partition-keys <partition-keys>] \
     [--primary-keys <primary-keys>] \
+    [--type-mapping <option1,option2...>] \
     [--computed-column <'column-name=expr-name(args[, ...])'> [--computed-column ...]] \
     [--mysql-conf <mysql-cdc-source-conf> [--mysql-conf <mysql-cdc-source-conf> ...]] \
     [--catalog-conf <paimon-catalog-conf> [--catalog-conf <paimon-catalog-conf> ...]] \
@@ -148,6 +149,7 @@ To use this feature through `flink run`, run the following shell command.
     [--including-tables <mysql-table-name|name-regular-expr>] \
     [--excluding-tables <mysql-table-name|name-regular-expr>] \
     [--mode <sync-mode>] \
+    [--type-mapping <option1,option2...>] \
     [--mysql-conf <mysql-cdc-source-conf> [--mysql-conf <mysql-cdc-source-conf> ...]] \
     [--catalog-conf <paimon-catalog-conf> [--catalog-conf <paimon-catalog-conf> ...]] \
     [--table-conf <paimon-table-sink-conf> [--table-conf <paimon-table-sink-conf> ...]]
@@ -462,8 +464,6 @@ Declaring other columns as primary keys is not feasible, as delete operations on
 3. MongoDB Change Streams are designed to return simple JSON documents without any data type definitions. This is because MongoDB is a document-oriented database, and one of its core features is the dynamic schema, where documents can contain different fields, and the data types of fields can be flexible. Therefore, the absence of data type definitions in Change Streams is to maintain this flexibility and extensibility.
 For this reason, we have set all field data types for synchronizing MongoDB to Paimon as String to address the issue of not being able to obtain data types.
 
-{{< generated/mongodb_sync_table >}}
-
 If the Paimon table you specify does not exist, this action will automatically create the table. Its schema will be derived from MongoDB collection. 
 
 Example 1: synchronize collection into one Paimon table
@@ -534,8 +534,6 @@ To use this feature through `flink run`, run the following shell command.
     [--table-conf <paimon-table-sink-conf> [--table-conf <paimon-table-sink-conf> ...]]
 ```
 
-{{< generated/mongodb_sync_database >}}
-
 All collections to be synchronized need to set _id as the primary key.
 For each MongoDB collection to be synchronized, if the corresponding Paimon table does not exist, this action will automatically create the table. 
 Its schema will be derived from all specified MongoDB collection. If the Paimon table already exists, its schema will be compared against the schema of all specified MongoDB collection.
@@ -600,11 +598,13 @@ behaviors of `RENAME TABLE` and `DROP COLUMN` will be ignored, `RENAME COLUMN` w
 
 {{< generated/compute_column >}}
 
-## Special Data Type Conversions
-1. MySQL TINYINT(1) type will be converted to Boolean by default. If you want to store number (-128~127) in it like MySQL, 
-you can specify that `--mysql-conf mysql.converter.tinyint1-to-bool=false`, then the column will be mapped to TINYINT in Paimon table.
-2. MySQL BIT(1) type will be converted to Boolean.
-3. When using Hive catalog, MySQL TIME type will be converted to STRING.
+## Special Data Type Mapping
+1. MySQL TINYINT(1) type will be mapped to Boolean by default. If you want to store number (-128~127) in it like MySQL, 
+you can specify type mapping option `tinyint1-not-bool`, then the column will be mapped to TINYINT in Paimon table.
+2. You can use type mapping option `to-nullable` to ignore all NOT NULL constraints (except primary keys).
+3. You can use type mapping option `to-string` to map all MySQL data type to STRING.
+4. MySQL BIT(1) type will be mapped to Boolean.
+5. When using Hive catalog, MySQL TIME type will be mapped to STRING.
 
 ## FAQ
 1. Chinese characters in records ingested from MySQL are garbled.
