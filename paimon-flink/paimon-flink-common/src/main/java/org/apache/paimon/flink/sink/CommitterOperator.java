@@ -83,6 +83,8 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
 
     private transient boolean endInput;
 
+    private transient String commitUser;
+
     private transient long lastSnapshot;
 
     public CommitterOperator(
@@ -107,7 +109,7 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
         // each job can only have one user name and this name must be consistent across restarts
         // we cannot use job id as commit user name here because user may change job id by creating
         // a savepoint, stop the job and then resume from savepoint
-        String commitUser =
+        commitUser =
                 StateUtils.getSingleValueFromState(
                         context, "commit_user_state", String.class, initialCommitUser);
         // parallelism of commit operator is always 1, so commitUser will never be null
@@ -199,6 +201,10 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
             committer.close();
         }
         super.close();
+    }
+
+    public String getCommitUser() {
+        return commitUser;
     }
 
     private void pollInputs() throws Exception {
