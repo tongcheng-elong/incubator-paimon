@@ -26,19 +26,15 @@ import org.apache.paimon.types.DataType;
 import org.apache.paimon.types.DataTypes;
 import org.apache.paimon.types.RowType;
 
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.core.execution.JobClient;
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -62,7 +58,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         createTestTopic(topic, 1, 1);
         // ---------- Write the Canal json into Kafka -------------------
         List<String> lines =
-                readLines(String.format("kafka.canal/table/%s/canal-data-1.txt", sourceDir));
+                readLines(String.format("kafka/canal/table/%s/canal-data-1.txt", sourceDir));
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
@@ -71,16 +67,6 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         Map<String, String> kafkaConfig = getBasicKafkaConfig();
         kafkaConfig.put("value.format", "canal-json");
         kafkaConfig.put("topic", topic);
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(2);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        Map<String, String> tableConfig = new HashMap<>();
-        tableConfig.put("bucket", String.valueOf(random.nextInt(3) + 1));
-        tableConfig.put("sink.parallelism", String.valueOf(random.nextInt(3) + 1));
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -91,7 +77,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                         Arrays.asList("pt", "_id"),
                         Collections.emptyList(),
                         Collections.emptyMap(),
-                        tableConfig);
+                        getBasicTableConfig());
         action.build(env);
         JobClient client = env.executeAsync();
 
@@ -118,7 +104,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         try {
             writeRecordsToKafka(
                     topic,
-                    readLines(String.format("kafka.canal/table/%s/canal-data-2.txt", sourceDir)));
+                    readLines(String.format("kafka/canal/table/%s/canal-data-2.txt", sourceDir)));
         } catch (Exception e) {
             throw new Exception("Failed to write canal data to Kafka.", e);
         }
@@ -144,7 +130,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         try {
             writeRecordsToKafka(
                     topic,
-                    readLines(String.format("kafka.canal/table/%s/canal-data-3.txt", sourceDir)));
+                    readLines(String.format("kafka/canal/table/%s/canal-data-3.txt", sourceDir)));
         } catch (Exception e) {
             throw new Exception("Failed to write canal data to Kafka.", e);
         }
@@ -171,7 +157,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         try {
             writeRecordsToKafka(
                     topic,
-                    readLines(String.format("kafka.canal/table/%s/canal-data-4.txt", sourceDir)));
+                    readLines(String.format("kafka/canal/table/%s/canal-data-4.txt", sourceDir)));
         } catch (Exception e) {
             throw new Exception("Failed to write canal data to Kafka.", e);
         }
@@ -202,7 +188,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         try {
             writeRecordsToKafka(
                     topic,
-                    readLines(String.format("kafka.canal/table/%s/canal-data-5.txt", sourceDir)));
+                    readLines(String.format("kafka/canal/table/%s/canal-data-5.txt", sourceDir)));
         } catch (Exception e) {
             throw new Exception("Failed to write canal data to Kafka.", e);
         }
@@ -238,7 +224,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         createTestTopic(topic, 1, 1);
         // ---------- Write the Canal json into Kafka -------------------
         List<String> lines =
-                readLines("kafka.canal/table/schemaevolutionmultiple/canal-data-1.txt");
+                readLines("kafka/canal/table/schemaevolutionmultiple/canal-data-1.txt");
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
@@ -248,12 +234,6 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         kafkaConfig.put("value.format", "canal-json");
 
         kafkaConfig.put("topic", topic);
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -291,7 +271,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
 
         try {
             writeRecordsToKafka(
-                    topic, readLines("kafka.canal/table/schemaevolutionmultiple/canal-data-2.txt"));
+                    topic, readLines("kafka/canal/table/schemaevolutionmultiple/canal-data-2.txt"));
         } catch (Exception e) {
             throw new Exception("Failed to write canal data to Kafka.", e);
         }
@@ -332,7 +312,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         createTestTopic(topic, 1, 1);
 
         // ---------- Write the Canal json into Kafka -------------------
-        List<String> lines = readLines("kafka.canal/table/alltype/canal-data.txt");
+        List<String> lines = readLines("kafka/canal/table/alltype/canal-data.txt");
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
@@ -342,12 +322,6 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         kafkaConfig.put("value.format", "canal-json");
 
         kafkaConfig.put("topic", topic);
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -427,7 +401,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                             DataTypes.STRING(), // _text
                             DataTypes.STRING(), // _mediumtext
                             DataTypes.STRING(), // _longtext
-                            DataTypes.BINARY(10), // _bin
+                            DataTypes.VARBINARY(10), // _bin
                             DataTypes.VARBINARY(20), // _varbin
                             DataTypes.BYTES(), // _tinyblob
                             DataTypes.BYTES(), // _blob
@@ -611,25 +585,15 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         final String topic = "not_support";
         createTestTopic(topic, 1, 1);
         // ---------- Write the Canal json into Kafka -------------------
-        List<String> lines = readLines("kafka.canal/table/schemaevolution/canal-data-1.txt");
+        List<String> lines = readLines("kafka/canal/table/schemaevolution/canal-data-1.txt");
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
             throw new Exception("Failed to write canal data to Kafka.", e);
         }
         Map<String, String> kafkaConfig = getBasicKafkaConfig();
-        kafkaConfig.put("value.format", "ogg-json");
+        kafkaConfig.put("value.format", "togg-json");
         kafkaConfig.put("topic", topic);
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(2);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        Map<String, String> tableConfig = new HashMap<>();
-        tableConfig.put("bucket", String.valueOf(random.nextInt(3) + 1));
-        tableConfig.put("sink.parallelism", String.valueOf(random.nextInt(3) + 1));
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -640,11 +604,11 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                         Arrays.asList("pt", "_id"),
                         Collections.emptyList(),
                         Collections.emptyMap(),
-                        tableConfig);
+                        getBasicTableConfig());
 
         assertThatThrownBy(() -> action.build(env))
                 .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("This format: ogg-json is not support.");
+                .hasMessage("This format: togg-json is not supported.");
     }
 
     @Test
@@ -653,7 +617,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         final String topic = "no_non_ddl_data";
         createTestTopic(topic, 1, 1);
         // ---------- Write the Canal json into Kafka -------------------
-        List<String> lines = readLines("kafka.canal/table/nononddldata/canal-data-1.txt");
+        List<String> lines = readLines("kafka/canal/table/nononddldata/canal-data-1.txt");
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
@@ -662,16 +626,6 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         Map<String, String> kafkaConfig = getBasicKafkaConfig();
         kafkaConfig.put("value.format", "canal-json");
         kafkaConfig.put("topic", topic);
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(2);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        Map<String, String> tableConfig = new HashMap<>();
-        tableConfig.put("bucket", String.valueOf(random.nextInt(3) + 1));
-        tableConfig.put("sink.parallelism", String.valueOf(random.nextInt(3) + 1));
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -682,11 +636,11 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                         Arrays.asList("pt", "_id"),
                         Collections.emptyList(),
                         Collections.emptyMap(),
-                        tableConfig);
+                        getBasicTableConfig());
 
         assertThatThrownBy(() -> action.build(env))
                 .isInstanceOf(Exception.class)
-                .hasMessage("Could not get metadata from server,topic:no_non_ddl_data");
+                .hasMessage("Could not get metadata from server, topic: no_non_ddl_data");
     }
 
     @Test
@@ -695,7 +649,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         final String topic = "assert_schema_compatible";
         createTestTopic(topic, 1, 1);
         // ---------- Write the Canal json into Kafka -------------------
-        List<String> lines = readLines("kafka.canal/table/schemaevolution/canal-data-1.txt");
+        List<String> lines = readLines("kafka/canal/table/schemaevolution/canal-data-1.txt");
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
@@ -716,16 +670,6 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                         .primaryKey("k")
                         .build();
         catalog.createTable(identifier, schema, false);
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(2);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        Map<String, String> tableConfig = new HashMap<>();
-        tableConfig.put("bucket", String.valueOf(random.nextInt(3) + 1));
-        tableConfig.put("sink.parallelism", String.valueOf(random.nextInt(3) + 1));
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -736,7 +680,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                         Arrays.asList("pt", "_id"),
                         Collections.emptyList(),
                         Collections.emptyMap(),
-                        tableConfig);
+                        getBasicTableConfig());
 
         assertThatThrownBy(() -> action.build(env))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -752,7 +696,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         final String topic = "start_up_specific";
         createTestTopic(topic, 1, 1);
         // ---------- Write the Canal json into Kafka -------------------
-        List<String> lines = readLines("kafka.canal/table/startupmode/canal-data-1.txt");
+        List<String> lines = readLines("kafka/canal/table/startupmode/canal-data-1.txt");
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
@@ -763,16 +707,6 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         kafkaConfig.put("topic", topic);
         kafkaConfig.put("scan.startup.mode", "specific-offsets");
         kafkaConfig.put("scan.startup.specific-offsets", "partition:0,offset:1");
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(2);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        Map<String, String> tableConfig = new HashMap<>();
-        tableConfig.put("bucket", String.valueOf(random.nextInt(3) + 1));
-        tableConfig.put("sink.parallelism", String.valueOf(random.nextInt(3) + 1));
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -783,7 +717,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                         Arrays.asList("pt", "_id"),
                         Collections.emptyList(),
                         Collections.emptyMap(),
-                        tableConfig);
+                        getBasicTableConfig());
         action.build(env);
         JobClient client = env.executeAsync();
 
@@ -811,7 +745,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         final String topic = "start_up_latest";
         createTestTopic(topic, 1, 1);
         // ---------- Write the Canal json into Kafka -------------------
-        List<String> lines = readLines("kafka.canal/table/startupmode/canal-data-1.txt");
+        List<String> lines = readLines("kafka/canal/table/startupmode/canal-data-1.txt");
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
@@ -821,16 +755,6 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         kafkaConfig.put("value.format", "canal-json");
         kafkaConfig.put("topic", topic);
         kafkaConfig.put("scan.startup.mode", "latest-offset");
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(2);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        Map<String, String> tableConfig = new HashMap<>();
-        tableConfig.put("bucket", String.valueOf(random.nextInt(3) + 1));
-        tableConfig.put("sink.parallelism", String.valueOf(random.nextInt(3) + 1));
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -841,14 +765,14 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                         Arrays.asList("pt", "_id"),
                         Collections.emptyList(),
                         Collections.emptyMap(),
-                        tableConfig);
+                        getBasicTableConfig());
         action.build(env);
         JobClient client = env.executeAsync();
 
         waitJobRunning(client);
 
         try {
-            writeRecordsToKafka(topic, readLines("kafka.canal/table/startupmode/canal-data-2.txt"));
+            writeRecordsToKafka(topic, readLines("kafka/canal/table/startupmode/canal-data-2.txt"));
         } catch (Exception e) {
             throw new Exception("Failed to write canal data to Kafka.", e);
         }
@@ -874,7 +798,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         final String topic = "start_up_timestamp";
         createTestTopic(topic, 1, 1);
         // ---------- Write the Canal json into Kafka -------------------
-        List<String> lines = readLines("kafka.canal/table/startupmode/canal-data-1.txt");
+        List<String> lines = readLines("kafka/canal/table/startupmode/canal-data-1.txt");
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
@@ -886,16 +810,6 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         kafkaConfig.put("scan.startup.mode", "timestamp");
         kafkaConfig.put(
                 "scan.startup.timestamp-millis", String.valueOf(System.currentTimeMillis()));
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(2);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        Map<String, String> tableConfig = new HashMap<>();
-        tableConfig.put("bucket", String.valueOf(random.nextInt(3) + 1));
-        tableConfig.put("sink.parallelism", String.valueOf(random.nextInt(3) + 1));
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -906,14 +820,14 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                         Arrays.asList("pt", "_id"),
                         Collections.emptyList(),
                         Collections.emptyMap(),
-                        tableConfig);
+                        getBasicTableConfig());
         action.build(env);
         JobClient client = env.executeAsync();
 
         waitJobRunning(client);
 
         try {
-            writeRecordsToKafka(topic, readLines("kafka.canal/table/startupmode/canal-data-2.txt"));
+            writeRecordsToKafka(topic, readLines("kafka/canal/table/startupmode/canal-data-2.txt"));
         } catch (Exception e) {
             throw new Exception("Failed to write canal data to Kafka.", e);
         }
@@ -939,7 +853,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         final String topic = "start_up_earliest";
         createTestTopic(topic, 1, 1);
         // ---------- Write the Canal json into Kafka -------------------
-        List<String> lines = readLines("kafka.canal/table/startupmode/canal-data-1.txt");
+        List<String> lines = readLines("kafka/canal/table/startupmode/canal-data-1.txt");
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
@@ -949,16 +863,6 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         kafkaConfig.put("value.format", "canal-json");
         kafkaConfig.put("topic", topic);
         kafkaConfig.put("scan.startup.mode", "earliest-offset");
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(2);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        Map<String, String> tableConfig = new HashMap<>();
-        tableConfig.put("bucket", String.valueOf(random.nextInt(3) + 1));
-        tableConfig.put("sink.parallelism", String.valueOf(random.nextInt(3) + 1));
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -969,14 +873,14 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                         Arrays.asList("pt", "_id"),
                         Collections.emptyList(),
                         Collections.emptyMap(),
-                        tableConfig);
+                        getBasicTableConfig());
         action.build(env);
         JobClient client = env.executeAsync();
 
         waitJobRunning(client);
 
         try {
-            writeRecordsToKafka(topic, readLines("kafka.canal/table/startupmode/canal-data-2.txt"));
+            writeRecordsToKafka(topic, readLines("kafka/canal/table/startupmode/canal-data-2.txt"));
         } catch (Exception e) {
             throw new Exception("Failed to write canal data to Kafka.", e);
         }
@@ -1004,7 +908,7 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         final String topic = "start_up_group";
         createTestTopic(topic, 1, 1);
         // ---------- Write the Canal json into Kafka -------------------
-        List<String> lines = readLines("kafka.canal/table/startupmode/canal-data-1.txt");
+        List<String> lines = readLines("kafka/canal/table/startupmode/canal-data-1.txt");
         try {
             writeRecordsToKafka(topic, lines);
         } catch (Exception e) {
@@ -1014,16 +918,6 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
         kafkaConfig.put("value.format", "canal-json");
         kafkaConfig.put("topic", topic);
         kafkaConfig.put("scan.startup.mode", "group-offsets");
-
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(2);
-        env.enableCheckpointing(1000);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        Map<String, String> tableConfig = new HashMap<>();
-        tableConfig.put("bucket", String.valueOf(random.nextInt(3) + 1));
-        tableConfig.put("sink.parallelism", String.valueOf(random.nextInt(3) + 1));
         KafkaSyncTableAction action =
                 new KafkaSyncTableAction(
                         kafkaConfig,
@@ -1034,14 +928,14 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                         Arrays.asList("pt", "_id"),
                         Collections.emptyList(),
                         Collections.emptyMap(),
-                        tableConfig);
+                        getBasicTableConfig());
         action.build(env);
         JobClient client = env.executeAsync();
 
         waitJobRunning(client);
 
         try {
-            writeRecordsToKafka(topic, readLines("kafka.canal/table/startupmode/canal-data-2.txt"));
+            writeRecordsToKafka(topic, readLines("kafka/canal/table/startupmode/canal-data-2.txt"));
         } catch (Exception e) {
             throw new Exception("Failed to write canal data to Kafka.", e);
         }
@@ -1061,5 +955,48 @@ public class KafkaCanalSyncTableActionITCase extends KafkaActionITCaseBase {
                 Arrays.asList(
                         "+I[1, 1, one]", "+I[1, 2, two]", "+I[1, 3, three]", "+I[1, 4, four]");
         waitForResult(expected, table, rowType, primaryKeys);
+    }
+
+    @Test
+    @Timeout(60)
+    public void testComputedColumn() throws Exception {
+        String topic = "computed_column";
+        createTestTopic(topic, 1, 1);
+
+        List<String> lines = readLines("kafka/canal/table/computedcolumn/canal-data-1.txt");
+        try {
+            writeRecordsToKafka(topic, lines);
+        } catch (Exception e) {
+            throw new Exception("Failed to write canal data to Kafka.", e);
+        }
+        Map<String, String> kafkaConfig = getBasicKafkaConfig();
+        kafkaConfig.put("value.format", "canal-json");
+        kafkaConfig.put("topic", topic);
+        KafkaSyncTableAction action =
+                new KafkaSyncTableAction(
+                        kafkaConfig,
+                        warehouse,
+                        database,
+                        tableName,
+                        Collections.singletonList("_year"),
+                        Arrays.asList("_id", "_year"),
+                        Collections.singletonList("_year=year(_date)"),
+                        Collections.emptyMap(),
+                        getBasicTableConfig());
+        action.build(env);
+        JobClient client = env.executeAsync();
+        waitJobRunning(client);
+
+        RowType rowType =
+                RowType.of(
+                        new DataType[] {
+                            DataTypes.INT().notNull(), DataTypes.DATE(), DataTypes.INT().notNull()
+                        },
+                        new String[] {"_id", "_date", "_year"});
+        waitForResult(
+                Collections.singletonList("+I[1, 19439, 2023]"),
+                getFileStoreTable(tableName),
+                rowType,
+                Arrays.asList("_id", "_year"));
     }
 }

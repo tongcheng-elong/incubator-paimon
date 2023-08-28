@@ -30,7 +30,6 @@ import org.apache.paimon.types.RowType;
 import org.apache.paimon.utils.JsonSerdeUtil;
 
 import org.apache.flink.core.execution.JobClient;
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -402,7 +401,7 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
                             DataTypes.STRING(), // _text
                             DataTypes.STRING(), // _mediumtext
                             DataTypes.STRING(), // _longtext
-                            DataTypes.BINARY(10), // _bin
+                            DataTypes.VARBINARY(10), // _bin
                             DataTypes.VARBINARY(20), // _varbin
                             DataTypes.BYTES(), // _tinyblob
                             DataTypes.BYTES(), // _blob
@@ -502,11 +501,15 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
                             "_set",
                         });
         FileStoreTable table = getFileStoreTable();
+        // BIT(64) data: 0B11111000111 -> 0B00000111_11000111
+        String bits =
+                Arrays.toString(
+                        new byte[] {0, 0, 0, 0, 0, 0, (byte) 0B00000111, (byte) 0B11000111});
         List<String> expected =
                 Arrays.asList(
                         "+I["
                                 + "1, 1.1, "
-                                + "true, [-17, -65, -67, 7, 0, 0, 0, 0, 0, 0], "
+                                + String.format("true, %s, ", bits)
                                 + "true, true, false, 1, 2, 3, "
                                 + "1000, 2000, 3000, "
                                 + "100000, 200000, 300000, "
@@ -611,7 +614,6 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
         mySqlConfig.put("database-name", DATABASE_NAME);
         mySqlConfig.put("table-name", "incompatible_field_\\d+");
 
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         MySqlSyncTableAction action =
                 new MySqlSyncTableAction(warehouse, database, tableName, mySqlConfig);
 
@@ -638,7 +640,6 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
                 Collections.singletonList("a"),
                 new HashMap<>());
 
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         MySqlSyncTableAction action =
                 new MySqlSyncTableAction(warehouse, database, tableName, mySqlConfig)
                         .withPrimaryKeys("a");
@@ -654,7 +655,6 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
         mySqlConfig.put("database-name", DATABASE_NAME);
         mySqlConfig.put("table-name", "schema_evolution_\\d+");
 
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         MySqlSyncTableAction action =
                 new MySqlSyncTableAction(warehouse, database, tableName, mySqlConfig)
                         .withPrimaryKeys("pk");
@@ -671,7 +671,6 @@ public class MySqlSyncTableActionITCase extends MySqlActionITCaseBase {
         mySqlConfig.put("database-name", DATABASE_NAME);
         mySqlConfig.put("table-name", "incompatible_pk_\\d+");
 
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         MySqlSyncTableAction action =
                 new MySqlSyncTableAction(warehouse, database, tableName, mySqlConfig);
 
