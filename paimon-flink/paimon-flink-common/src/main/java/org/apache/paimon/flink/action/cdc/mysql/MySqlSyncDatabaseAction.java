@@ -24,7 +24,7 @@ import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.flink.FlinkConnectorOptions;
 import org.apache.paimon.flink.action.Action;
 import org.apache.paimon.flink.action.ActionBase;
-import org.apache.paimon.flink.action.cdc.DatabaseSyncMode;
+import org.apache.paimon.flink.action.MultiTablesSinkMode;
 import org.apache.paimon.flink.action.cdc.TableNameConverter;
 import org.apache.paimon.flink.action.cdc.TypeMapping;
 import org.apache.paimon.flink.action.cdc.mysql.schema.MySqlSchemasInfo;
@@ -56,8 +56,8 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static org.apache.paimon.flink.action.cdc.DatabaseSyncMode.COMBINED;
-import static org.apache.paimon.flink.action.cdc.DatabaseSyncMode.DIVIDED;
+import static org.apache.paimon.flink.action.MultiTablesSinkMode.COMBINED;
+import static org.apache.paimon.flink.action.MultiTablesSinkMode.DIVIDED;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /**
@@ -110,17 +110,12 @@ public class MySqlSyncDatabaseAction extends ActionBase {
     private String tableSuffix = "";
     private String includingTables = ".*";
     @Nullable String excludingTables;
-    private DatabaseSyncMode mode = DIVIDED;
+    private MultiTablesSinkMode mode = DIVIDED;
     private TypeMapping typeMapping = TypeMapping.defaultMapping();
 
     // for test purpose
     private final List<Identifier> monitoredTables = new ArrayList<>();
     private final List<Identifier> excludedTables = new ArrayList<>();
-
-    public MySqlSyncDatabaseAction(
-            String warehouse, String database, Map<String, String> mySqlConfig) {
-        this(warehouse, database, Collections.emptyMap(), mySqlConfig);
-    }
 
     public MySqlSyncDatabaseAction(
             String warehouse,
@@ -173,7 +168,7 @@ public class MySqlSyncDatabaseAction extends ActionBase {
         return this;
     }
 
-    public MySqlSyncDatabaseAction withMode(DatabaseSyncMode mode) {
+    public MySqlSyncDatabaseAction withMode(MultiTablesSinkMode mode) {
         this.mode = mode;
         return this;
     }
@@ -278,7 +273,7 @@ public class MySqlSyncDatabaseAction extends ActionBase {
                                 typeMapping);
 
         String database = this.database;
-        DatabaseSyncMode mode = this.mode;
+        MultiTablesSinkMode mode = this.mode;
         FlinkCdcSyncDatabaseSinkBuilder<String> sinkBuilder =
                 new FlinkCdcSyncDatabaseSinkBuilder<String>()
                         .withInput(
@@ -375,6 +370,16 @@ public class MySqlSyncDatabaseAction extends ActionBase {
     @VisibleForTesting
     public List<Identifier> excludedTables() {
         return excludedTables;
+    }
+
+    @VisibleForTesting
+    public Map<String, String> catalogConfig() {
+        return catalogConfig;
+    }
+
+    @VisibleForTesting
+    public Map<String, String> tableConfig() {
+        return tableConfig;
     }
 
     /**

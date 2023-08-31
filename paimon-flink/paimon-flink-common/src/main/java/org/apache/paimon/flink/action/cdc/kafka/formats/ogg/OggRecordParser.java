@@ -20,6 +20,7 @@ package org.apache.paimon.flink.action.cdc.kafka.formats.ogg;
 
 import org.apache.paimon.flink.action.cdc.ComputedColumn;
 import org.apache.paimon.flink.action.cdc.TableNameConverter;
+import org.apache.paimon.flink.action.cdc.TypeMapping;
 import org.apache.paimon.flink.action.cdc.kafka.KafkaSchema;
 import org.apache.paimon.flink.action.cdc.kafka.formats.RecordParser;
 import org.apache.paimon.flink.sink.cdc.CdcRecord;
@@ -58,14 +59,13 @@ public class OggRecordParser extends RecordParser {
     private static final String OP_UPDATE = "U";
     private static final String OP_INSERT = "I";
     private static final String OP_DELETE = "D";
-    private final List<ComputedColumn> computedColumns;
 
     public OggRecordParser(
             boolean caseSensitive,
+            TypeMapping typeMapping,
             TableNameConverter tableNameConverter,
             List<ComputedColumn> computedColumns) {
-        super(tableNameConverter, caseSensitive);
-        this.computedColumns = computedColumns;
+        super(caseSensitive, typeMapping, tableNameConverter, computedColumns);
     }
 
     @Override
@@ -213,7 +213,7 @@ public class OggRecordParser extends RecordParser {
                     resultMap.put(
                             computedColumn.columnName(),
                             computedColumn.eval(resultMap.get(computedColumn.fieldReference())));
-                    paimonFieldTypes.put(computedColumn.columnName(), STRING_DATA_TYPE);
+                    paimonFieldTypes.put(computedColumn.columnName(), computedColumn.columnType());
                 });
 
         return resultMap;

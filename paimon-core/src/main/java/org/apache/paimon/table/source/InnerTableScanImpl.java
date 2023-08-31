@@ -54,7 +54,7 @@ public class InnerTableScanImpl extends AbstractInnerTableScan {
     }
 
     @Override
-    public DataFilePlan plan() {
+    public TableScan.Plan plan() {
         if (startingScanner == null) {
             startingScanner = createStartingScanner(false);
         }
