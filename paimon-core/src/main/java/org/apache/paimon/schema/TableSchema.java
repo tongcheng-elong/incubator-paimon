@@ -129,7 +129,7 @@ public class TableSchema implements Serializable {
     }
 
     public List<String> trimmedPrimaryKeys() {
-        if (primaryKeys.size() > 0) {
+        if (primaryKeys.size() > 0 && !crossPartitionUpdate()) {
             List<String> adjusted =
                     primaryKeys.stream()
                             .filter(pk -> !partitionKeys.contains(pk))
