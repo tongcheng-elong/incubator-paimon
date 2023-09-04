@@ -107,6 +107,11 @@ public class SnapshotManager implements Serializable {
         }
     }
 
+    public @Nullable Snapshot earliestSnapshot() {
+        Long snapshotId = earliestSnapshotId();
+        return snapshotId == null ? null : snapshot(snapshotId);
+    }
+
     public @Nullable Long earliestSnapshotId() {
         try {
             return findEarliest();

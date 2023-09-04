@@ -18,6 +18,8 @@
 
 package org.apache.paimon.flink.sink;
 
+import org.apache.flink.metrics.Gauge;
+import org.apache.paimon.Snapshot;
 import org.apache.paimon.flink.sink.StoreSinkWriteState.StateValueFilter;
 import org.apache.paimon.options.Options;
 import org.apache.paimon.table.FileStoreTable;
@@ -27,6 +29,7 @@ import org.apache.flink.runtime.state.StateSnapshotContext;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /** An abstract class for table write operator. */
 public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, Committable> {
@@ -38,6 +41,10 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
 
     private transient StoreSinkWriteState state;
     protected transient StoreSinkWrite write;
+
+    private transient long snapshotDelayMinuteGauge = 0L;
+    private transient long snapshotCleanDelayMinuteGauge = 0L;
+    private transient long latestSnapshotIdentifyId = 0L;
 
     public TableWriteOperator(
             FileStoreTable table,
@@ -81,6 +88,7 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
                         state,
                         getContainingTask().getEnvironment().getIOManager(),
                         memoryPool);
+        registerMetrics();
     }
 
     protected abstract boolean containLogSystem();
@@ -88,6 +96,7 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
     @Override
     public void snapshotState(StateSnapshotContext context) throws Exception {
         super.snapshotState(context);
+        exposeMetrics();
 
         write.snapshotState();
         state.snapshotState();
@@ -105,5 +114,39 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
     protected List<Committable> prepareCommit(boolean doCompaction, long checkpointId)
             throws IOException {
         return write.prepareCommit(doCompaction, checkpointId);
+    }
+
+    private void registerMetrics() {
+        getMetricGroup()
+                .gauge(
+                        "paimonSnapshotDelayMinuteGauge",
+                        (Gauge<Long>) () -> snapshotDelayMinuteGauge);
+        getMetricGroup()
+                .gauge(
+                        "paimonSnapshotCleanDelayMinuteGauge",
+                        (Gauge<Long>) () -> snapshotCleanDelayMinuteGauge);
+        getMetricGroup().gauge("paimonLatestSnapshotIdentify", (Gauge<Long>) () -> latestSnapshotIdentifyId);
+    }
+
+    private void exposeMetrics() {
+        try {
+            final Snapshot latestSnapShot = table.snapshotManager().latestSnapshot();
+            if (latestSnapShot != null) {
+                snapshotDelayMinuteGauge =
+                        TimeUnit.MINUTES.convert(
+                                System.currentTimeMillis() - latestSnapShot.timeMillis(),
+                                TimeUnit.MILLISECONDS);
+                snapshotCleanDelayMinuteGauge =
+                        TimeUnit.MINUTES.convert(
+                                latestSnapShot.timeMillis()
+                                        - table.snapshotManager().earliestSnapshot().timeMillis(),
+                                TimeUnit.MILLISECONDS);
+                // dedicate recovery use state
+                latestSnapshotIdentifyId = latestSnapShot.commitIdentifier();
+            }
+
+        } catch (Exception e) {
+            LOG.error("Failed to get latest snapshot", e);
+        }
     }
 }
