@@ -31,8 +31,8 @@ public class CompactResult {
     private final List<DataFileMeta> after;
     private final List<DataFileMeta> changelog;
 
-    /** The amount of time once compact takes*/
-    private  long compactTime;
+    /** The amount of time once compact takes */
+    private long compactTime;
 
     public CompactResult() {
         this(Collections.emptyList(), Collections.emptyList());

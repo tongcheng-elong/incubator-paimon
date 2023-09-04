@@ -70,6 +70,6 @@ public interface RecordWriter<T> {
     /** Close this writer, the call will delete newly generated but not committed files. */
     void close() throws Exception;
 
-    /** get the time of  once compact takes by compactManager*/
+    /** get the time of once compact takes by compactManager */
     long getCompactTime();
 }

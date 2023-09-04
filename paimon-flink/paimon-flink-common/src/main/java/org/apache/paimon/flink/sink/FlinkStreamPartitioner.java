@@ -24,7 +24,6 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +40,7 @@ public class FlinkStreamPartitioner<T> extends StreamPartitioner<T> {
 
     @Override
     public void setup(int numberOfChannels) {
-        LOG.info("setup channel numbers:{}",numberOfChannels);
+        LOG.info("setup channel numbers:{}", numberOfChannels);
         super.setup(numberOfChannels);
         channelComputer.setup(numberOfChannels);
     }

@@ -67,7 +67,7 @@ public class AppendOnlyWriter implements RecordWriter<InternalRow> {
 
     private RowDataRollingFileWriter writer;
 
-    /** The amount of time once compact takes*/
+    /** The amount of time once compact takes */
     private long compactTime;
 
     public AppendOnlyWriter(

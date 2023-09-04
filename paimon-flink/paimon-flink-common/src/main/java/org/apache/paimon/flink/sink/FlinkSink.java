@@ -18,8 +18,6 @@
 
 package org.apache.paimon.flink.sink;
 
-import org.apache.flink.configuration.BatchExecutionOptions;
-import org.apache.flink.configuration.CoreOptions;
 import org.apache.paimon.CoreOptions.ChangelogProducer;
 import org.apache.paimon.flink.FlinkConnectorOptions;
 import org.apache.paimon.flink.utils.StreamExecutionEnvironmentUtils;
@@ -29,6 +27,7 @@ import org.apache.paimon.options.Options;
 import org.apache.paimon.table.FileStoreTable;
 
 import org.apache.flink.api.common.RuntimeExecutionMode;
+import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.core.memory.ManagedMemoryUseCase;
@@ -145,9 +144,16 @@ public abstract class FlinkSink<T> implements Serializable {
             DataStream<T> input, String commitUser, Integer parallelism) {
         StreamExecutionEnvironment env = input.getExecutionEnvironment();
         ReadableConfig conf = StreamExecutionEnvironmentUtils.getConfiguration(env);
-        System.out.printf("sink param:"+parallelism+",input param:"+input.getParallelism()+",default:"+conf.get(CoreOptions.DEFAULT_PARALLELISM));
+        System.out.printf(
+                "sink param:"
+                        + parallelism
+                        + ",input param:"
+                        + input.getParallelism()
+                        + ",default:"
+                        + conf.get(CoreOptions.DEFAULT_PARALLELISM));
 
-        boolean isStreaming = conf.get(ExecutionOptions.RUNTIME_MODE) == RuntimeExecutionMode.STREAMING;
+        boolean isStreaming =
+                conf.get(ExecutionOptions.RUNTIME_MODE) == RuntimeExecutionMode.STREAMING;
 
         // partitioner parallelism
         Integer calParallelism = input.getParallelism();

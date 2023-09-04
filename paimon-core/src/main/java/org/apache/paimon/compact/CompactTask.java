@@ -35,7 +35,7 @@ public abstract class CompactTask implements Callable<CompactResult> {
     public CompactResult call() throws Exception {
         long startMillis = System.currentTimeMillis();
         CompactResult result = doCompact();
-        result.setCompactTime(System.currentTimeMillis()-startMillis);
+        result.setCompactTime(System.currentTimeMillis() - startMillis);
         LOG.info(logMetric(startMillis, result.before(), result.after()));
 
         return result;

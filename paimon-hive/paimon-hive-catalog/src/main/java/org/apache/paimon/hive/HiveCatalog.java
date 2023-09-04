@@ -415,8 +415,9 @@ public class HiveCatalog extends AbstractCatalog {
         checkFieldNamesUpperCaseInSchemaChange(changes);
 
         checkIdentifierUpperCase(identifier);
-        final SchemaManager schemaManager = new SchemaManager(fileIO, getDataTableLocation(identifier))
-                .withLock(lock(identifier));
+        final SchemaManager schemaManager =
+                new SchemaManager(fileIO, getDataTableLocation(identifier))
+                        .withLock(lock(identifier));
         // first commit changes to underlying files
         TableSchema schema = schemaManager.commitChanges(changes);
 
@@ -561,7 +562,8 @@ public class HiveCatalog extends AbstractCatalog {
         table.setSd(sd);
 
         // update location
-        locationHelper.specifyTableLocation(table, super.getDataTableLocation(identifier).toString());
+        locationHelper.specifyTableLocation(
+                table, super.getDataTableLocation(identifier).toString());
     }
 
     @VisibleForTesting

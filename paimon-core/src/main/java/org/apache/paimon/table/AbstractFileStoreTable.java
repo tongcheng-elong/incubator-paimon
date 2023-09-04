@@ -54,6 +54,7 @@ import org.apache.paimon.table.source.snapshot.StaticFromTimestampStartingScanne
 import org.apache.paimon.utils.Preconditions;
 import org.apache.paimon.utils.SnapshotManager;
 import org.apache.paimon.utils.TagManager;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

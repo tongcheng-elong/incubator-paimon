@@ -52,7 +52,8 @@ public class StaticFromTimestampStartingScanner implements StartingScanner {
                     startupMillis);
             return new NoSnapshot();
         }
-        LOG.info("get startingSnapshot:{}, from timestamp:{}",startingSnapshot.id(),startupMillis);
+        LOG.info(
+                "get startingSnapshot:{}, from timestamp:{}", startingSnapshot.id(), startupMillis);
         return StartingScanner.fromPlan(
                 snapshotReader.withMode(ScanMode.ALL).withSnapshot(startingSnapshot.id()).read());
     }

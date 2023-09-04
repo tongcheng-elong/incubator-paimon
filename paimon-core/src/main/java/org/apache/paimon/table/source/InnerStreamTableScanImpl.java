@@ -101,13 +101,13 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
             ScannedResult scannedResult = (ScannedResult) result;
             long currentSnapshotId = scannedResult.currentSnapshotId();
             nextSnapshotId = currentSnapshotId + 1;
-            LOG.info("start scan from snapshot:{}",currentSnapshotId);
+            LOG.info("start scan from snapshot:{}", currentSnapshotId);
             isFullPhaseEnd =
                     boundedChecker.shouldEndInput(snapshotManager.snapshot(currentSnapshotId));
             return scannedResult.plan();
         } else if (result instanceof StartingScanner.NextSnapshot) {
             nextSnapshotId = ((StartingScanner.NextSnapshot) result).nextSnapshotId();
-            LOG.info("start scan from next snapshot:{}",nextSnapshotId);
+            LOG.info("start scan from next snapshot:{}", nextSnapshotId);
             isFullPhaseEnd =
                     snapshotManager.snapshotExists(nextSnapshotId - 1)
                             && boundedChecker.shouldEndInput(

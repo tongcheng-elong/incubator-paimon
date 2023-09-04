@@ -24,6 +24,7 @@ import org.apache.paimon.predicate.Predicate;
 import org.apache.paimon.table.source.snapshot.SnapshotReader;
 import org.apache.paimon.table.source.snapshot.StartingScanner;
 import org.apache.paimon.utils.SnapshotManager;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,8 +63,10 @@ public class InnerTableScanImpl extends AbstractInnerTableScan {
         if (hasNext) {
             hasNext = false;
             StartingScanner.Result result = startingScanner.scan(snapshotManager, snapshotReader);
-            if(result instanceof StartingScanner.ScannedResult){
-                LOG.info("start scan from snapshot:{}",((StartingScanner.ScannedResult) result).currentSnapshotId());
+            if (result instanceof StartingScanner.ScannedResult) {
+                LOG.info(
+                        "start scan from snapshot:{}",
+                        ((StartingScanner.ScannedResult) result).currentSnapshotId());
             }
             return DataFilePlan.fromResult(result);
         } else {

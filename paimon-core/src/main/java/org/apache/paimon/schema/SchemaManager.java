@@ -123,12 +123,19 @@ public class SchemaManager implements Serializable {
                                                 + latest());
                             });
 
-            List<DataField> fields = schema.fields().stream().map(s -> new DataField(
-                    s.id(),
-                    s.name(),
-                    s.type(),
-                    StringUtils.isEmpty(s.description()) ? s.description() : s.description().replace("_UTF8'", "")))
-                    .collect(Collectors.toList());
+            List<DataField> fields =
+                    schema.fields().stream()
+                            .map(
+                                    s ->
+                                            new DataField(
+                                                    s.id(),
+                                                    s.name(),
+                                                    s.type(),
+                                                    StringUtils.isEmpty(s.description())
+                                                            ? s.description()
+                                                            : s.description()
+                                                                    .replace("_UTF8'", "")))
+                            .collect(Collectors.toList());
             List<String> partitionKeys = schema.partitionKeys();
             List<String> primaryKeys = schema.primaryKeys();
             Map<String, String> options = schema.options();
