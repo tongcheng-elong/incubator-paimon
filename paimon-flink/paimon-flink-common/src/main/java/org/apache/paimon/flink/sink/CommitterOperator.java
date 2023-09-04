@@ -17,10 +17,6 @@
 
 package org.apache.paimon.flink.sink;
 
-import org.apache.paimon.operation.FileStoreCommit;
-import org.apache.paimon.operation.FileStoreCommitImpl;
-import org.apache.paimon.utils.SnapshotManager;
-
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
@@ -31,13 +27,8 @@ import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TreeMap;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
@@ -84,7 +75,7 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
 
     private transient String commitUser;
 
-    private transient long lastSnapshot;
+    private transient long commitTimeSecondGauge;
 
     public CommitterOperator(
             boolean streamingCheckpointEnabled,
@@ -97,6 +88,12 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
         this.committerFactory = checkNotNull(committerFactory);
         this.committableStateManager = committableStateManager;
         setChainingStrategy(ChainingStrategy.ALWAYS);
+    }
+
+    @Override
+    public void open() throws Exception {
+        super.open();
+        this.commitTimeSecondGauge = 0L;
     }
 
     @Override
@@ -116,18 +113,8 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
 
         committableStateManager.initializeState(context, committer);
 
-        this.lastSnapshot = getLastSnapshot();
-
-        getRuntimeContext()
-                .getMetricGroup()
-                .gauge(
-                        "paimonLastSnapshot",
-                        new Gauge<Long>() {
-                            @Override
-                            public Long getValue() {
-                                return lastSnapshot;
-                            }
-                        });
+        getMetricGroup()
+                .gauge("paimonCommitTimeSecondGuage", (Gauge<Long>) () -> commitTimeSecondGauge);
     }
 
     @Override
@@ -148,6 +135,10 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
         super.snapshotState(context);
         pollInputs();
         committableStateManager.snapshotState(context, committables(committablesPerCheckpoint));
+        // for streaming
+        LOG.info(
+                "Committer Operator snapshotState complete checkpointId:{}",
+                context.getCheckpointId());
     }
 
     private List<GlobalCommitT> committables(NavigableMap<Long, GlobalCommitT> map) {
@@ -168,29 +159,33 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
     @Override
     public void notifyCheckpointComplete(long checkpointId) throws Exception {
         super.notifyCheckpointComplete(checkpointId);
+        LOG.info(
+                "Committer Operator notifyCheckpointComplete start checkpointId:{} ,Thread id {}, Thread name {}",
+                checkpointId,
+                Thread.currentThread().getId(),
+                Thread.currentThread().getName());
+
+        long start = System.currentTimeMillis();
         commitUpToCheckpoint(endInput ? Long.MAX_VALUE : checkpointId);
+        long end = System.currentTimeMillis();
+
+        commitTimeSecondGauge = TimeUnit.SECONDS.convert(end - start, TimeUnit.MILLISECONDS);
+        LOG.info(
+                "Committer Operator notifyCheckpointComplete end checkpointId:{}, waiting time {}",
+                checkpointId,
+                commitTimeSecondGauge);
     }
 
     private void commitUpToCheckpoint(long checkpointId) throws Exception {
         NavigableMap<Long, GlobalCommitT> headMap =
                 committablesPerCheckpoint.headMap(checkpointId, true);
-        committer.commit(committables(headMap));
-        headMap.clear();
-        lastSnapshot = getLastSnapshot();
-    }
-
-    public Long getLastSnapshot() {
         try {
-            FileStoreCommit fileStoreCommit = ((StoreCommitter) committer).getCommit().getCommit();
-            SnapshotManager snapshotManager =
-                    ((FileStoreCommitImpl) fileStoreCommit).getSnapshotManager();
-            return snapshotManager.latestSnapshotId() == null
-                    ? 0L
-                    : snapshotManager.latestSnapshotId();
-        } catch (Exception e) {
-            LOG.warn("get last snapshotId error:{}", e.getMessage());
+            committer.commit(committables(headMap));
+        } catch (Throwable throwable) {
+            LOG.error("notifyCheckpointComplete meet error retrying", throwable);
+            committer.commit(committables(headMap));
         }
-        return 0L;
+        headMap.clear();
     }
 
     @Override
@@ -201,12 +196,16 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
 
     @Override
     public void close() throws Exception {
-        committablesPerCheckpoint.clear();
+        LOG.info(
+                "Committer Operator close start checkpointId, Thread id {}, Thread name {}",
+                Thread.currentThread().getId(),
+                Thread.currentThread().getName());
         inputs.clear();
         if (committer != null) {
             committer.close();
         }
         super.close();
+        LOG.info("Committer Operator close end checkpointId");
     }
 
     public String getCommitUser() {

@@ -45,10 +45,6 @@ public class StoreCommitter implements Committer<Committable, ManifestCommittabl
         this.metrics = metrics;
     }
 
-    public TableCommitImpl getCommit() {
-        return commit;
-    }
-
     @Override
     public ManifestCommittable combine(
             long checkpointId, long watermark, List<Committable> committables) {

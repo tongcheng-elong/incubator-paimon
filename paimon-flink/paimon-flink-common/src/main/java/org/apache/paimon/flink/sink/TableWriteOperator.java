@@ -18,6 +18,7 @@
 
 package org.apache.paimon.flink.sink;
 
+import org.apache.paimon.Snapshot;
 import org.apache.paimon.annotation.VisibleForTesting;
 import org.apache.paimon.flink.sink.StoreSinkWriteState.StateValueFilter;
 import org.apache.paimon.options.Options;
@@ -43,7 +44,8 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
     private transient StoreSinkWriteState state;
     protected transient StoreSinkWrite write;
     private transient long snapshotDelayMinuteGauge = 0L;
-    private transient long snapshotCleanDelayHourGauge = 0L;
+    private transient long snapshotCleanDelayMinuteGauge = 0L;
+    private transient long latestSnapshotIdentifyId = 0L;
 
     public TableWriteOperator(
             FileStoreTable table,
@@ -58,14 +60,15 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
     @Override
     public void open() throws Exception {
         super.open();
-        getRuntimeContext()
-                .getMetricGroup()
-                .gauge("paimonSnapshotDelayHourGauge", (Gauge<Long>) () -> snapshotDelayMinuteGauge);
-        getRuntimeContext()
-                .getMetricGroup()
+        getMetricGroup()
                 .gauge(
-                        "paimonSnapshotCleanDelayHourGauge",
-                        (Gauge<Long>) () -> snapshotCleanDelayHourGauge);
+                        "paimonSnapshotDelayMinuteGauge",
+                        (Gauge<Long>) () -> snapshotDelayMinuteGauge);
+        getMetricGroup()
+                .gauge(
+                        "paimonSnapshotCleanDelayMinuteGauge",
+                        (Gauge<Long>) () -> snapshotCleanDelayMinuteGauge);
+        getMetricGroup().gauge("paimonLatestSnapshotIdentify", (Gauge<Long>) () -> latestSnapshotIdentifyId);
     }
 
     @Override
@@ -119,19 +122,21 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
     public void snapshotState(StateSnapshotContext context) throws Exception {
         super.snapshotState(context);
         try {
-            final long betweenMills =
-                    table.snapshotManager().latestSnapshot() == null
-                            ? 0L
-                            : System.currentTimeMillis()
-                                    - table.snapshotManager().latestSnapshot().timeMillis();
-            snapshotDelayMinuteGauge = TimeUnit.MINUTES.convert(betweenMills, TimeUnit.MILLISECONDS);
-            final long cleanBetweenMills =
-                    table.snapshotManager().latestSnapshot() == null
-                            ? 0L
-                            : table.snapshotManager().latestSnapshot().timeMillis()
-                                    - table.snapshotManager().earliestSnapshot().timeMillis();
-            snapshotCleanDelayHourGauge =
-                    TimeUnit.HOURS.convert(cleanBetweenMills, TimeUnit.MILLISECONDS);
+            final Snapshot latestSnapShot = table.snapshotManager().latestSnapshot();
+            if (latestSnapShot != null) {
+                snapshotDelayMinuteGauge =
+                        TimeUnit.MINUTES.convert(
+                                System.currentTimeMillis() - latestSnapShot.timeMillis(),
+                                TimeUnit.MILLISECONDS);
+                snapshotCleanDelayMinuteGauge =
+                        TimeUnit.MINUTES.convert(
+                                latestSnapShot.timeMillis()
+                                        - table.snapshotManager().earliestSnapshot().timeMillis(),
+                                TimeUnit.MILLISECONDS);
+                // dedicate recovery use state
+                latestSnapshotIdentifyId = latestSnapShot.commitIdentifier();
+            }
+
         } catch (Exception e) {
             LOG.error("Failed to get latest snapshot", e);
         }

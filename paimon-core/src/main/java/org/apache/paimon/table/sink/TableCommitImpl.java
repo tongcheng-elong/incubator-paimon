@@ -89,10 +89,6 @@ public class TableCommitImpl implements InnerTableCommit {
         this.consumerManager = consumerManager;
     }
 
-    public FileStoreCommit getCommit() {
-        return commit;
-    }
-
     @Override
     public TableCommitImpl withOverwrite(@Nullable Map<String, String> overwritePartitions) {
         this.overwritePartition = overwritePartitions;
