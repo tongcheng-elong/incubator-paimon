@@ -58,20 +58,6 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
     }
 
     @Override
-    public void open() throws Exception {
-        super.open();
-        getMetricGroup()
-                .gauge(
-                        "paimonSnapshotDelayMinuteGauge",
-                        (Gauge<Long>) () -> snapshotDelayMinuteGauge);
-        getMetricGroup()
-                .gauge(
-                        "paimonSnapshotCleanDelayMinuteGauge",
-                        (Gauge<Long>) () -> snapshotCleanDelayMinuteGauge);
-        getMetricGroup().gauge("paimonLatestSnapshotIdentify", (Gauge<Long>) () -> latestSnapshotIdentifyId);
-    }
-
-    @Override
     public void initializeState(StateInitializationContext context) throws Exception {
         super.initializeState(context);
 
@@ -100,6 +86,7 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
                 stateFilter,
                 getContainingTask().getEnvironment().getIOManager(),
                 commitUser);
+        registerMetrics();
     }
 
     @VisibleForTesting
@@ -121,6 +108,42 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
     @Override
     public void snapshotState(StateSnapshotContext context) throws Exception {
         super.snapshotState(context);
+        updateMetrics();
+
+        write.snapshotState();
+        state.snapshotState();
+    }
+
+    @Override
+    public void close() throws Exception {
+        super.close();
+        if (write != null) {
+            write.close();
+        }
+    }
+
+    @Override
+    protected List<Committable> prepareCommit(boolean waitCompaction, long checkpointId)
+            throws IOException {
+        return write.prepareCommit(waitCompaction, checkpointId);
+    }
+
+    private void registerMetrics() {
+        getMetricGroup()
+                .gauge(
+                        "paimonSnapshotDelayMinuteGauge",
+                        (Gauge<Long>) () -> snapshotDelayMinuteGauge);
+        getMetricGroup()
+                .gauge(
+                        "paimonSnapshotCleanDelayMinuteGauge",
+                        (Gauge<Long>) () -> snapshotCleanDelayMinuteGauge);
+        getMetricGroup()
+                .gauge(
+                        "paimonLatestSnapshotIdentify",
+                        (Gauge<Long>) () -> latestSnapshotIdentifyId);
+    }
+
+    private void updateMetrics() {
         try {
             final Snapshot latestSnapShot = table.snapshotManager().latestSnapshot();
             if (latestSnapShot != null) {
@@ -140,22 +163,5 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
         } catch (Exception e) {
             LOG.error("Failed to get latest snapshot", e);
         }
-
-        write.snapshotState();
-        state.snapshotState();
-    }
-
-    @Override
-    public void close() throws Exception {
-        super.close();
-        if (write != null) {
-            write.close();
-        }
-    }
-
-    @Override
-    protected List<Committable> prepareCommit(boolean waitCompaction, long checkpointId)
-            throws IOException {
-        return write.prepareCommit(waitCompaction, checkpointId);
     }
 }
