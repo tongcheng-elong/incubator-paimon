@@ -28,9 +28,6 @@ import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.paimon.operation.FileStoreCommit;
-import org.apache.paimon.operation.FileStoreCommitImpl;
-import org.apache.paimon.utils.SnapshotManager;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -39,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.paimon.utils.Preconditions.checkNotNull;
 
@@ -83,7 +81,7 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
 
     private transient boolean endInput;
 
-    private transient long lastSnapshot;
+    private transient long commitTimeSecondGauge;
 
     public CommitterOperator(
             boolean streamingCheckpointEnabled,
@@ -104,6 +102,7 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
 
         this.currentWatermark = Long.MIN_VALUE;
         this.endInput = false;
+        this.commitTimeSecondGauge = 0L;
         // each job can only have one user name and this name must be consistent across restarts
         // we cannot use job id as commit user name here because user may change job id by creating
         // a savepoint, stop the job and then resume from savepoint
@@ -115,14 +114,8 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
 
         committableStateManager.initializeState(context, committer);
 
-        this.lastSnapshot=getLastSnapshot();
-
-        getRuntimeContext().getMetricGroup().gauge("paimonLastSnapshot", new Gauge<Long>() {
-            @Override
-            public Long getValue() {
-                return lastSnapshot;
-            }
-        });
+        getMetricGroup()
+                .gauge("paimonCommitTimeSecondGuage", (Gauge<Long>) () -> commitTimeSecondGauge);
     }
 
     @Override
@@ -163,26 +156,34 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
     @Override
     public void notifyCheckpointComplete(long checkpointId) throws Exception {
         super.notifyCheckpointComplete(checkpointId);
+        LOG.info(
+                "Committer Operator notifyCheckpointComplete start checkpointId:{} ,Thread id {}, Thread name {}",
+                checkpointId,
+                Thread.currentThread().getId(),
+                Thread.currentThread().getName());
+
+        long start = System.currentTimeMillis();
         commitUpToCheckpoint(endInput ? Long.MAX_VALUE : checkpointId);
+        long end = System.currentTimeMillis();
+
+        commitTimeSecondGauge = TimeUnit.SECONDS.convert(end - start, TimeUnit.MILLISECONDS);
+        LOG.info(
+                "Committer Operator notifyCheckpointComplete end checkpointId:{}, waiting time {}",
+                checkpointId,
+                commitTimeSecondGauge);
     }
 
     private void commitUpToCheckpoint(long checkpointId) throws Exception {
         NavigableMap<Long, GlobalCommitT> headMap =
                 committablesPerCheckpoint.headMap(checkpointId, true);
-        committer.commit(committables(headMap));
-        headMap.clear();
-        lastSnapshot=getLastSnapshot();
-    }
-
-    public Long getLastSnapshot(){
         try {
-            FileStoreCommit fileStoreCommit= ((StoreCommitter)committer).getCommit().getCommit();
-            SnapshotManager snapshotManager=((FileStoreCommitImpl)fileStoreCommit).getSnapshotManager();
-            return snapshotManager.latestSnapshotId() == null ? 0L: snapshotManager.latestSnapshotId();
-        }catch (Exception e){
-            LOG.warn("get last snapshotId error:{}",e.getMessage());
+            committer.commit(committables(headMap));
+        } catch (Throwable throwable) {
+            LOG.error("notifyCheckpointComplete meet error retrying", throwable);
+            committer.commit(committables(headMap));
         }
-        return 0L;
+
+        headMap.clear();
     }
 
     @Override
