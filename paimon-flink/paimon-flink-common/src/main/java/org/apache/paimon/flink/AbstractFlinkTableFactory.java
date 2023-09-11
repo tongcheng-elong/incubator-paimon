@@ -69,7 +69,7 @@ public abstract class AbstractFlinkTableFactory
 
     @Override
     public DynamicTableSource createDynamicTableSource(Context context) {
-        System.out.println("change-date:2023-07-27");
+        System.out.println("change-date:2023-09-11");
         CatalogTable origin = context.getCatalogTable().getOrigin();
         boolean isStreamingMode =
                 context.getConfiguration().get(ExecutionOptions.RUNTIME_MODE)
@@ -88,7 +88,7 @@ public abstract class AbstractFlinkTableFactory
 
     @Override
     public DynamicTableSink createDynamicTableSink(Context context) {
-        System.out.println("change-date:2023-07-27");
+        System.out.println("change-date:2023-09-11");
         return new FlinkTableSink(
                 context.getObjectIdentifier(),
                 buildPaimonTable(context),
