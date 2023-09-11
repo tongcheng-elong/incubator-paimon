@@ -176,13 +176,7 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
     private void commitUpToCheckpoint(long checkpointId) throws Exception {
         NavigableMap<Long, GlobalCommitT> headMap =
                 committablesPerCheckpoint.headMap(checkpointId, true);
-        try {
-            committer.commit(committables(headMap));
-        } catch (Throwable throwable) {
-            LOG.error("notifyCheckpointComplete meet error retrying", throwable);
-            committer.commit(committables(headMap));
-        }
-
+        committer.commit(committables(headMap));
         headMap.clear();
     }
 
