@@ -62,7 +62,7 @@ public class InnerTableScanImpl extends AbstractInnerTableScan {
 
         if (hasNext) {
             hasNext = false;
-            StartingScanner.Result result = startingScanner.scan(snapshotManager, snapshotReader);
+            StartingScanner.Result result = startingScanner.scan(snapshotReader);
             if (result instanceof StartingScanner.ScannedResult) {
                 LOG.info(
                         "start scan from snapshot:{}",

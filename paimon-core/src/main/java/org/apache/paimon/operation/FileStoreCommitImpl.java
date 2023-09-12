@@ -397,7 +397,7 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                 Collections.emptyList(),
                 commitIdentifier,
                 null,
-                Collections.emptyMap());
+                new HashMap<>());
     }
 
     @Override

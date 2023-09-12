@@ -32,21 +32,25 @@ import javax.annotation.Nullable;
  * {@link StartingScanner} for the {@link CoreOptions.StartupMode#FROM_TIMESTAMP} startup mode of a
  * batch read.
  */
-public class StaticFromTimestampStartingScanner implements StartingScanner {
+public class StaticFromTimestampStartingScanner extends AbstractStartingScanner {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(StaticFromTimestampStartingScanner.class);
 
     private final long startupMillis;
 
-    public StaticFromTimestampStartingScanner(long startupMillis) {
+    public StaticFromTimestampStartingScanner(SnapshotManager snapshotManager, long startupMillis) {
+        super(snapshotManager);
         this.startupMillis = startupMillis;
+        Snapshot snapshot = timeTravelToTimestamp(snapshotManager, startupMillis);
+        if (snapshot != null) {
+            this.startingSnapshotId = snapshot.id();
+        }
     }
 
     @Override
-    public Result scan(SnapshotManager snapshotManager, SnapshotReader snapshotReader) {
-        Snapshot startingSnapshot = timeTravelToTimestamp(snapshotManager, startupMillis);
-        if (startingSnapshot == null) {
+    public Result scan(SnapshotReader snapshotReader) {
+        if (startingSnapshotId == null) {
             LOG.debug(
                     "There is currently no snapshot earlier than or equal to timestamp[{}]",
                     startupMillis);
@@ -55,7 +59,7 @@ public class StaticFromTimestampStartingScanner implements StartingScanner {
         LOG.info(
                 "get startingSnapshot:{}, from timestamp:{}", startingSnapshot.id(), startupMillis);
         return StartingScanner.fromPlan(
-                snapshotReader.withMode(ScanMode.ALL).withSnapshot(startingSnapshot.id()).read());
+                snapshotReader.withMode(ScanMode.ALL).withSnapshot(startingSnapshotId).read());
     }
 
     @Nullable
