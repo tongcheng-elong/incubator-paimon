@@ -27,8 +27,8 @@ import org.apache.paimon.manifest.ManifestEntrySerializer;
 import org.apache.paimon.manifest.ManifestFile;
 import org.apache.paimon.manifest.ManifestFileMeta;
 import org.apache.paimon.manifest.ManifestList;
+import org.apache.paimon.partition.PartitionPredicate;
 import org.apache.paimon.predicate.Predicate;
-import org.apache.paimon.predicate.PredicateBuilder;
 import org.apache.paimon.schema.SchemaManager;
 import org.apache.paimon.schema.TableSchema;
 import org.apache.paimon.stats.FieldStatsArraySerializer;
@@ -38,7 +38,6 @@ import org.apache.paimon.utils.FileStorePathFactory;
 import org.apache.paimon.utils.Filter;
 import org.apache.paimon.utils.Pair;
 import org.apache.paimon.utils.ParallellyExecuteUtils;
-import org.apache.paimon.utils.RowDataToObjectArrayConverter;
 import org.apache.paimon.utils.SnapshotManager;
 
 import org.slf4j.Logger;
@@ -62,7 +61,7 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
 
     private static final Logger LOG = LoggerFactory.getLogger(AbstractFileStoreScan.class);
     private final FieldStatsArraySerializer partitionStatsConverter;
-    private final RowDataToObjectArrayConverter partitionConverter;
+    private final RowType partitionType;
     private final SnapshotManager snapshotManager;
     private final ManifestFile.Factory manifestFileFactory;
     private final ManifestList manifestList;
@@ -73,7 +72,7 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
     private final SchemaManager schemaManager;
     protected final ScanBucketFilter bucketKeyFilter;
 
-    private Predicate partitionFilter;
+    private PartitionPredicate partitionFilter;
     private Snapshot specifiedSnapshot = null;
     private Filter<Integer> bucketFilter = null;
     private List<ManifestFileMeta> specifiedManifests = null;
@@ -94,7 +93,7 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
             boolean checkNumOfBuckets,
             Integer scanManifestParallelism) {
         this.partitionStatsConverter = new FieldStatsArraySerializer(partitionType);
-        this.partitionConverter = new RowDataToObjectArrayConverter(partitionType);
+        this.partitionType = partitionType;
         this.bucketKeyFilter = bucketKeyFilter;
         this.snapshotManager = snapshotManager;
         this.schemaManager = schemaManager;
@@ -108,22 +107,22 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
 
     @Override
     public FileStoreScan withPartitionFilter(Predicate predicate) {
-        this.partitionFilter = predicate;
+        if (partitionType.getFieldCount() > 0 && predicate != null) {
+            this.partitionFilter = PartitionPredicate.fromPredicate(partitionType, predicate);
+        } else {
+            this.partitionFilter = null;
+        }
         return this;
     }
 
     @Override
     public FileStoreScan withPartitionFilter(List<BinaryRow> partitions) {
-        List<Predicate> predicates =
-                partitions.stream()
-                        .filter(p -> p.getFieldCount() > 0)
-                        .map(partitionConverter::createEqualPredicate)
-                        .collect(Collectors.toList());
-        if (predicates.isEmpty()) {
-            return this;
+        if (partitionType.getFieldCount() > 0 && !partitions.isEmpty()) {
+            this.partitionFilter = PartitionPredicate.fromMultiple(partitionType, partitions);
         } else {
-            return withPartitionFilter(PredicateBuilder.or(predicates));
+            this.partitionFilter = null;
         }
+        return this;
     }
 
     @Override
@@ -255,10 +254,10 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
         for (ManifestEntry file : ManifestEntry.mergeEntries(entries)) {
             if (checkNumOfBuckets && file.totalBuckets() != numOfBuckets) {
                 String partInfo =
-                        partitionConverter.getArity() > 0
+                        partitionType.getFieldCount() > 0
                                 ? "partition "
                                         + FileStorePathFactory.getPartitionComputer(
-                                                        partitionConverter.rowType(),
+                                                        partitionType,
                                                         FileStorePathFactory.PARTITION_DEFAULT_NAME
                                                                 .defaultValue())
                                                 .generatePartValues(file.partition())
@@ -359,9 +358,7 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
         Function<InternalRow, Integer> totalBucketGetter =
                 ManifestEntrySerializer.totalBucketGetter();
         return row -> {
-            if ((partitionFilter != null
-                    && !partitionFilter.test(
-                            partitionConverter.convert(partitionGetter.apply(row))))) {
+            if ((partitionFilter != null && !partitionFilter.test(partitionGetter.apply(row)))) {
                 return false;
             }
 
