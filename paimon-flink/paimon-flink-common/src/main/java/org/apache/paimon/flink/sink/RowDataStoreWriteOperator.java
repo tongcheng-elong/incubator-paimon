@@ -18,6 +18,7 @@
 
 package org.apache.paimon.flink.sink;
 
+import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.data.BinaryRow;
 import org.apache.paimon.flink.FlinkRowWrapper;
 import org.apache.paimon.flink.log.LogWriteCallback;
@@ -42,7 +43,6 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.streaming.util.functions.StreamingFunctionUtils;
-import org.apache.flink.table.data.RowData;
 
 import javax.annotation.Nullable;
 
@@ -51,8 +51,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** A {@link PrepareCommitOperator} to write {@link RowData}. Record schema is fixed. */
-public class RowDataStoreWriteOperator extends TableWriteOperator<RowData> {
+/** A {@link PrepareCommitOperator} to write {@link InternalRow}. Record schema is fixed. */
+public class RowDataStoreWriteOperator extends TableWriteOperator<InternalRow> {
 
     private static final long serialVersionUID = 3L;
 
@@ -147,12 +147,12 @@ public class RowDataStoreWriteOperator extends TableWriteOperator<RowData> {
     }
 
     @Override
-    public void processElement(StreamRecord<RowData> element) throws Exception {
+    public void processElement(StreamRecord<InternalRow> element) throws Exception {
         sinkContext.timestamp = element.hasTimestamp() ? element.getTimestamp() : null;
 
         SinkRecord record;
         try {
-            record = write.write(new FlinkRowWrapper(element.getValue()));
+            record = write.write(element.getValue());
         } catch (Exception e) {
             throw new IOException(e);
         }
