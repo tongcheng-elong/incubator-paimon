@@ -183,7 +183,7 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
             committer.commit(committables(headMap));
         } catch (Throwable throwable) {
             LOG.error("notifyCheckpointComplete meet error retrying", throwable);
-            committer.commit(committables(headMap));
+            committer.filterAndCommit(committables(headMap));
         }
         headMap.clear();
     }
