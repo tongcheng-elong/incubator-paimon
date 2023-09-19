@@ -444,7 +444,7 @@ public class HiveCatalog extends AbstractCatalog {
     }
 
     @Override
-    protected String warehouse() {
+    public String warehouse() {
         return warehouse;
     }
 
