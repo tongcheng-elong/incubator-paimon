@@ -162,8 +162,8 @@ public class FileStoreExpireImpl implements FileStoreExpire {
 
         endExclusiveId = Math.min(beginInclusiveId + expireLimit, endExclusiveId);
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(
+        if (LOG.isInfoEnabled()) {
+            LOG.info(
                     "Snapshot expire range is [" + beginInclusiveId + ", " + endExclusiveId + ")");
         }
 
@@ -173,8 +173,8 @@ public class FileStoreExpireImpl implements FileStoreExpire {
         // deleted merge tree files in a snapshot are not used by the next snapshot, so the range of
         // id should be (beginInclusiveId, endExclusiveId]
         for (long id = beginInclusiveId + 1; id <= endExclusiveId; id++) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Ready to delete merge tree files not used by snapshot #" + id);
+            if (LOG.isInfoEnabled()) {
+                LOG.info("Ready to delete merge tree files not used by snapshot #" + id);
             }
             Snapshot snapshot = snapshotManager.snapshot(id);
             // expire merge tree files and collect changed buckets
@@ -184,8 +184,8 @@ public class FileStoreExpireImpl implements FileStoreExpire {
 
         // delete changelog files
         for (long id = beginInclusiveId; id < endExclusiveId; id++) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Ready to delete changelog files from snapshot #" + id);
+            if (LOG.isInfoEnabled()) {
+                LOG.info("Ready to delete changelog files from snapshot #" + id);
             }
             Snapshot snapshot = snapshotManager.snapshot(id);
             if (snapshot.changelogManifestList() != null) {
@@ -204,8 +204,8 @@ public class FileStoreExpireImpl implements FileStoreExpire {
         skippingSnapshots.add(snapshotManager.snapshot(endExclusiveId));
         Set<String> skippingSet = snapshotDeletion.manifestSkippingSet(skippingSnapshots);
         for (long id = beginInclusiveId; id < endExclusiveId; id++) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Ready to delete manifests in snapshot #" + id);
+            if (LOG.isInfoEnabled()) {
+                LOG.info("Ready to delete manifests in snapshot #" + id);
             }
 
             Snapshot snapshot = snapshotManager.snapshot(id);
