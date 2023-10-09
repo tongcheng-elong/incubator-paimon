@@ -19,6 +19,7 @@
 package org.apache.paimon.flink.action.cdc;
 
 import org.apache.paimon.annotation.VisibleForTesting;
+import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.flink.FlinkConnectorOptions;
 import org.apache.paimon.flink.action.Action;
@@ -35,8 +36,7 @@ import org.apache.paimon.table.FileStoreTable;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.connector.source.Source;
 import org.apache.flink.configuration.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,7 +47,6 @@ import java.util.Map;
 import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.assertSchemaCompatible;
 import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.buildPaimonSchema;
 import static org.apache.paimon.flink.action.cdc.ComputedColumnUtils.buildComputedColumns;
-import static org.apache.paimon.utils.Preconditions.checkState;
 
 /**
  * Base {@link Action} for synchronizing one message queue topic into one Paimon table.
@@ -76,9 +75,6 @@ import static org.apache.paimon.utils.Preconditions.checkState;
  * </ul>
  */
 public abstract class MessageQueueSyncTableActionBase extends ActionBase {
-
-    private static final Logger LOG =
-            LoggerFactory.getLogger(MessageQueueSyncTableActionBase.class);
 
     protected final String database;
     protected final String table;
@@ -139,64 +135,41 @@ public abstract class MessageQueueSyncTableActionBase extends ActionBase {
 
     protected abstract Source<String, ?, ?> buildSource();
 
-    protected abstract String topic();
-
-    protected abstract MessageQueueSchemaUtils.ConsumerWrapper consumer(String topic);
+    protected abstract Schema buildSchema();
 
     protected abstract DataFormat getDataFormat();
 
     protected abstract String sourceName();
 
     @Override
-    public void build() throws Exception {
+    public void build(StreamExecutionEnvironment env) throws Exception {
         Source<String, ?, ?> source = buildSource();
 
         catalog.createDatabase(database, true);
         boolean caseSensitive = catalog.caseSensitive();
         // TODO: add case validate
 
+        Schema mqSchema = buildSchema();
+
         Identifier identifier = new Identifier(database, table);
-        List<ComputedColumn> computedColumns;
-        if (catalog.tableExists(identifier)) {
-            fileStoreTable = (FileStoreTable) catalog.getTable(identifier).copy(tableConfig);
-            try {
-                Schema retrievedSchema = retrieveSchema();
-                computedColumns =
-                        buildComputedColumns(computedColumnArgs, retrievedSchema.fields());
-                Schema fromMq =
-                        buildPaimonSchema(
-                                partitionKeys,
-                                primaryKeys,
-                                computedColumns,
-                                tableConfig,
-                                retrievedSchema);
-                assertSchemaCompatible(fileStoreTable.schema(), fromMq.fields());
-            } catch (MessageQueueSchemaUtils.SchemaRetrievalException e) {
-                LOG.info(
-                        "Failed to retrieve schema from message queue but there exists specified Paimon table. "
-                                + "Schema compatibility check will be skipped. If you have specified computed columns, "
-                                + "here will use the existed Paimon table schema to build them. Please make sure "
-                                + "the Paimon table has defined all the argument columns used for computed columns.");
-                computedColumns =
-                        buildComputedColumns(computedColumnArgs, fileStoreTable.schema().fields());
-                // check partition keys and primary keys in case that user specified them
-                checkConstraints();
-            }
-        } else {
-            Schema retrievedSchema = retrieveSchema();
-            computedColumns = buildComputedColumns(computedColumnArgs, retrievedSchema.fields());
-            Schema fromMq =
-                    buildPaimonSchema(
-                            partitionKeys,
-                            primaryKeys,
-                            computedColumns,
-                            tableConfig,
-                            retrievedSchema);
+        List<ComputedColumn> computedColumns = buildComputedColumns(computedColumnArgs, mqSchema);
+        Schema fromMq =
+                buildPaimonSchema(
+                        partitionKeys,
+                        primaryKeys,
+                        computedColumns,
+                        tableConfig,
+                        mqSchema,
+                        new CdcMetadataConverter[] {});
 
+        try {
+            fileStoreTable = (FileStoreTable) catalog.getTable(identifier);
+            fileStoreTable = fileStoreTable.copy(tableConfig);
+            assertSchemaCompatible(fileStoreTable.schema(), fromMq.fields());
+        } catch (Catalog.TableNotExistException e) {
             catalog.createTable(identifier, fromMq, false);
-            fileStoreTable = (FileStoreTable) catalog.getTable(identifier).copy(tableConfig);
+            fileStoreTable = (FileStoreTable) catalog.getTable(identifier);
         }
-
         DataFormat format = getDataFormat();
         RecordParser recordParser =
                 format.createParser(caseSensitive, typeMapping, computedColumns);
@@ -223,37 +196,6 @@ public abstract class MessageQueueSyncTableActionBase extends ActionBase {
         sinkBuilder.build();
     }
 
-    private Schema retrieveSchema() throws Exception {
-        String topic = topic();
-        try (MessageQueueSchemaUtils.ConsumerWrapper consumer = consumer(topic)) {
-            return MessageQueueSchemaUtils.getSchema(consumer, topic, getDataFormat(), typeMapping);
-        }
-    }
-
-    private void checkConstraints() {
-        if (!partitionKeys.isEmpty()) {
-            List<String> actualPartitionKeys = fileStoreTable.partitionKeys();
-            checkState(
-                    actualPartitionKeys.size() == partitionKeys.size()
-                            && actualPartitionKeys.containsAll(partitionKeys),
-                    "Specified partition keys [%s] are not equal to the existed table partition keys [%s]. "
-                            + "You should remove the --partition-keys argument or re-create the table if the partition keys are wrong.",
-                    String.join(",", partitionKeys),
-                    String.join(",", actualPartitionKeys));
-        }
-
-        if (!primaryKeys.isEmpty()) {
-            List<String> actualPrimaryKeys = fileStoreTable.primaryKeys();
-            checkState(
-                    actualPrimaryKeys.size() == primaryKeys.size()
-                            && actualPrimaryKeys.containsAll(primaryKeys),
-                    "Specified primary keys [%s] are not equal to the existed table primary keys [%s]. "
-                            + "You should remove the --primary-keys argument or re-create the table if the primary keys are wrong.",
-                    String.join(",", primaryKeys),
-                    String.join(",", actualPrimaryKeys));
-        }
-    }
-
     @VisibleForTesting
     public Map<String, String> tableConfig() {
         return tableConfig;
@@ -272,7 +214,8 @@ public abstract class MessageQueueSyncTableActionBase extends ActionBase {
 
     @Override
     public void run() throws Exception {
-        build();
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        build(env);
         env.execute(jobName());
     }
 }

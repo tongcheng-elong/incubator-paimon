@@ -16,13 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.paimon.flink.action.cdc.kafka.format;
+package org.apache.paimon.flink.action.cdc.format;
 
 import org.apache.paimon.flink.action.cdc.ComputedColumn;
 import org.apache.paimon.flink.action.cdc.TypeMapping;
-import org.apache.paimon.flink.action.cdc.kafka.KafkaSchema;
 import org.apache.paimon.flink.sink.cdc.CdcRecord;
 import org.apache.paimon.flink.sink.cdc.RichCdcMultiplexRecord;
+import org.apache.paimon.schema.Schema;
 import org.apache.paimon.types.DataType;
 import org.apache.paimon.types.DataTypes;
 import org.apache.paimon.types.RowKind;
@@ -36,21 +36,27 @@ import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.databind.ObjectMap
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.paimon.shade.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 
-import org.apache.commons.lang3.BooleanUtils;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.util.Collector;
 
+import javax.annotation.Nullable;
+
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.columnCaseConvertAndDuplicateCheck;
+import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.columnDuplicateErrMsg;
+import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.listCaseConvert;
 import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.mapKeyCaseConvert;
 import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.recordKeyDuplicateErrMsg;
-import static org.apache.paimon.utils.JsonSerdeUtil.isNull;
 
 /**
  * Provides a base implementation for parsing messages of various formats into {@link
@@ -68,6 +74,8 @@ public abstract class RecordParser implements FlatMapFunction<String, RichCdcMul
     protected final boolean caseSensitive;
     protected final TypeMapping typeMapping;
     protected final List<ComputedColumn> computedColumns;
+    protected String fieldPrimaryKeys;
+    protected static String fieldData;
     protected List<String> primaryKeys;
     protected LinkedHashMap<String, String> fieldTypes;
     protected JsonNode root;
@@ -81,46 +89,62 @@ public abstract class RecordParser implements FlatMapFunction<String, RichCdcMul
         this.computedColumns = computedColumns;
     }
 
-    public KafkaSchema getKafkaSchema(String record) {
+    @Nullable
+    public Schema buildSchema(String record) {
         this.parseRootJson(record);
-        if (BooleanUtils.isTrue(this.isDDL())) {
+        if (this.isDDL()) {
             return null;
         }
-        databaseName = extractStringFromRootJson(FIELD_DATABASE);
+
         tableName = extractStringFromRootJson(FIELD_TABLE);
+        this.setPrimaryField();
+        this.setDataField();
         this.validateFormat();
         this.extractPrimaryKeys();
         this.extractFieldTypesFromDatabaseSchema();
         LinkedHashMap<String, DataType> paimonFieldTypes = this.setPaimonFieldType();
-        return new KafkaSchema(databaseName, tableName, paimonFieldTypes, primaryKeys);
+
+        Schema.Builder builder = Schema.newBuilder();
+        Set<String> existedFields = new HashSet<>();
+        Function<String, String> columnDuplicateErrMsg = columnDuplicateErrMsg(tableName);
+        for (Map.Entry<String, DataType> entry : paimonFieldTypes.entrySet()) {
+            builder.column(
+                    columnCaseConvertAndDuplicateCheck(
+                            entry.getKey(), existedFields, caseSensitive, columnDuplicateErrMsg),
+                    entry.getValue());
+        }
+
+        builder.primaryKey(listCaseConvert(primaryKeys, caseSensitive));
+
+        return builder.build();
     }
 
     protected abstract List<RichCdcMultiplexRecord> extractRecords();
 
     protected abstract void validateFormat();
 
-    protected abstract String primaryField();
+    protected abstract void setPrimaryField();
 
-    protected abstract String dataField();
+    protected abstract void setDataField();
 
-    protected Boolean isDDL() {
+    protected boolean isDDL() {
         return false;
     }
 
     protected String extractStringFromRootJson(String key) {
         JsonNode node = root.get(key);
-        return isNull(node) ? null : node.asText();
+        return node == null ? null : node.asText();
     }
 
     protected Boolean extractBooleanFromRootJson(String key) {
         JsonNode node = root.get(key);
-        return isNull(node) ? null : node.asBoolean();
+        return node == null ? null : node.asBoolean();
     }
 
     protected LinkedHashMap<String, DataType> setPaimonFieldType() {
         LinkedHashMap<String, DataType> fieldTypes = new LinkedHashMap<>();
-        JsonNode record = root.get(dataField());
-        if (isNull(record)) {
+        JsonNode record = root.get(fieldData);
+        if (record == null) {
             return fieldTypes;
         }
         Map<String, Object> linkedHashMap =
@@ -135,7 +159,9 @@ public abstract class RecordParser implements FlatMapFunction<String, RichCdcMul
     @Override
     public void flatMap(String value, Collector<RichCdcMultiplexRecord> out) throws Exception {
         root = OBJECT_MAPPER.readValue(value, JsonNode.class);
-        this.validateFormat();
+        this.setPrimaryField();
+        this.setDataField();
+        validateFormat();
 
         databaseName = extractStringFromRootJson(FIELD_DATABASE);
         tableName = extractStringFromRootJson(FIELD_TABLE);
@@ -176,7 +202,7 @@ public abstract class RecordParser implements FlatMapFunction<String, RichCdcMul
     }
 
     protected void extractPrimaryKeys() {
-        ArrayNode pkNames = JsonSerdeUtil.getNodeAs(root, primaryField(), ArrayNode.class);
+        ArrayNode pkNames = JsonSerdeUtil.getNodeAs(root, fieldPrimaryKeys, ArrayNode.class);
         primaryKeys =
                 StreamSupport.stream(pkNames.spliterator(), false)
                         .map(pk -> applyCaseSensitiveFieldName(pk.asText()))
