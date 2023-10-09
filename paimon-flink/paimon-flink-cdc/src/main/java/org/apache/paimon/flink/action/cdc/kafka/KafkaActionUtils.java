@@ -18,10 +18,8 @@
 
 package org.apache.paimon.flink.action.cdc.kafka;
 
-import org.apache.paimon.flink.action.cdc.CdcActionCommonUtils;
-import org.apache.paimon.flink.action.cdc.ComputedColumn;
-import org.apache.paimon.schema.Schema;
-import org.apache.paimon.types.DataType;
+import org.apache.paimon.flink.action.cdc.MessageQueueSchemaUtils;
+import org.apache.paimon.flink.action.cdc.format.DataFormat;
 import org.apache.paimon.utils.StringUtils;
 
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
@@ -36,12 +34,20 @@ import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.util.CollectionUtil;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
 
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -50,47 +56,27 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.streaming.connectors.kafka.table.KafkaConnectorOptions.SCAN_STARTUP_SPECIFIC_OFFSETS;
-import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.columnDuplicateErrMsg;
-import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.listCaseConvert;
-import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.mapKeyCaseConvert;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
-class KafkaActionUtils {
+/** Utils for Kafka Action. */
+public class KafkaActionUtils {
 
     public static final String PROPERTIES_PREFIX = "properties.";
 
     private static final String PARTITION = "partition";
     private static final String OFFSET = "offset";
 
-    static Schema buildPaimonSchema(
-            KafkaSchema kafkaSchema,
-            List<String> specifiedPartitionKeys,
-            List<String> specifiedPrimaryKeys,
-            List<ComputedColumn> computedColumns,
-            Map<String, String> tableConfig,
-            boolean caseSensitive) {
-        LinkedHashMap<String, DataType> sourceColumns =
-                mapKeyCaseConvert(
-                        kafkaSchema.fields(),
-                        caseSensitive,
-                        columnDuplicateErrMsg(kafkaSchema.tableName()));
-        List<String> primaryKeys = listCaseConvert(kafkaSchema.primaryKeys(), caseSensitive);
-
-        return CdcActionCommonUtils.buildPaimonSchema(
-                specifiedPartitionKeys,
-                specifiedPrimaryKeys,
-                computedColumns,
-                tableConfig,
-                sourceColumns,
-                null,
-                primaryKeys);
-    }
-
-    static KafkaSource<String> buildKafkaSource(Configuration kafkaConfig) {
+    public static KafkaSource<String> buildKafkaSource(Configuration kafkaConfig) {
         validateKafkaConfig(kafkaConfig);
         KafkaSourceBuilder<String> kafkaSourceBuilder = KafkaSource.builder();
+
+        List<String> topics =
+                kafkaConfig.get(KafkaConnectorOptions.TOPIC).stream()
+                        .flatMap(topic -> Arrays.stream(topic.split(",")))
+                        .collect(Collectors.toList());
+
         kafkaSourceBuilder
-                .setTopics(kafkaConfig.get(KafkaConnectorOptions.TOPIC))
+                .setTopics(topics)
                 .setValueOnlyDeserializer(new SimpleStringSchema())
                 .setGroupId(kafkaPropertiesGroupId(kafkaConfig));
         Properties properties = new Properties();
@@ -203,7 +189,7 @@ class KafkaActionUtils {
      *
      * @return specificOffsets with Map format, key is partition, and value is offset
      */
-    public static Map<Integer, Long> parseSpecificOffsets(
+    private static Map<Integer, Long> parseSpecificOffsets(
             String specificOffsetsStr, String optionKey) {
         final Map<Integer, Long> offsetMap = new HashMap<>();
         final String[] pairs = specificOffsetsStr.split(";");
@@ -261,12 +247,70 @@ class KafkaActionUtils {
                         KafkaConnectorOptions.PROPS_BOOTSTRAP_SERVERS.key()));
     }
 
-    public static String kafkaPropertiesGroupId(Configuration kafkaConfig) {
+    private static String kafkaPropertiesGroupId(Configuration kafkaConfig) {
         String groupId = kafkaConfig.get(KafkaConnectorOptions.PROPS_GROUP_ID);
         if (StringUtils.isEmpty(groupId)) {
             groupId = UUID.randomUUID().toString();
             kafkaConfig.set(KafkaConnectorOptions.PROPS_GROUP_ID, groupId);
         }
         return groupId;
+    }
+
+    static DataFormat getDataFormat(Configuration kafkaConfig) {
+        return DataFormat.fromConfigString(kafkaConfig.get(KafkaConnectorOptions.VALUE_FORMAT));
+    }
+
+    static MessageQueueSchemaUtils.ConsumerWrapper getKafkaEarliestConsumer(
+            Configuration kafkaConfig, String topic) {
+        Properties props = new Properties();
+        props.put(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                kafkaConfig.get(KafkaConnectorOptions.PROPS_BOOTSTRAP_SERVERS));
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, kafkaPropertiesGroupId(kafkaConfig));
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+
+        List<PartitionInfo> partitionInfos = consumer.partitionsFor(topic);
+        if (partitionInfos.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Failed to find partition information for topic " + topic);
+        }
+        int firstPartition =
+                partitionInfos.stream().map(PartitionInfo::partition).sorted().findFirst().get();
+        Collection<TopicPartition> topicPartitions =
+                Collections.singletonList(new TopicPartition(topic, firstPartition));
+        consumer.assign(topicPartitions);
+        consumer.seekToBeginning(topicPartitions);
+
+        return new KafkaConsumerWrapper(consumer);
+    }
+
+    private static class KafkaConsumerWrapper implements MessageQueueSchemaUtils.ConsumerWrapper {
+
+        private final KafkaConsumer<String, String> consumer;
+
+        KafkaConsumerWrapper(KafkaConsumer<String, String> kafkaConsumer) {
+            this.consumer = kafkaConsumer;
+        }
+
+        @Override
+        public List<String> getRecords(String topic, int pollTimeOutMills) {
+            ConsumerRecords<String, String> consumerRecords =
+                    consumer.poll(Duration.ofMillis(pollTimeOutMills));
+            Iterable<ConsumerRecord<String, String>> records = consumerRecords.records(topic);
+            List<String> result = new ArrayList<>();
+            records.forEach(r -> result.add(r.value()));
+            return result;
+        }
+
+        @Override
+        public void close() {
+            consumer.close();
+        }
     }
 }
