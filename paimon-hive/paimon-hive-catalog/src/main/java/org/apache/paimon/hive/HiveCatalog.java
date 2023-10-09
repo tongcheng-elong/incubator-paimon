@@ -137,6 +137,16 @@ public class HiveCatalog extends AbstractCatalog {
     }
 
     @Override
+    public Path getDataTableLocation(Identifier identifier) {
+        try {
+            Table table = client.getTable(identifier.getDatabaseName(), identifier.getObjectName());
+            return new Path(table.getSd().getLocation());
+        } catch (TException e) {
+            throw new RuntimeException("Failed to get table location", e);
+        }
+    }
+
+    @Override
     public Optional<CatalogLock.Factory> lockFactory() {
         return lockEnabled()
                 ? Optional.of(HiveCatalogLock.createFactory(hiveConf, clientClassName))
