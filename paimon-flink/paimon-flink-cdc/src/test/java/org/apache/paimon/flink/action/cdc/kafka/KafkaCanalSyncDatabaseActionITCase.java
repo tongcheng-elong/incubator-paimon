@@ -18,6 +18,7 @@
 
 package org.apache.paimon.flink.action.cdc.kafka;
 
+import org.apache.paimon.options.CatalogOptions;
 import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.testutils.assertj.AssertionUtils;
 import org.apache.paimon.types.DataType;
@@ -34,6 +35,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.apache.paimon.flink.action.cdc.TypeMapping.TypeMappingMode.TO_STRING;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -295,6 +297,8 @@ public class KafkaCanalSyncDatabaseActionITCase extends KafkaActionITCaseBase {
                         .withTablePrefix("test_prefix_")
                         .withTableSuffix("_test_suffix")
                         .withTableConfig(getBasicTableConfig())
+                        // test including check with affix
+                        .includingTables(ThreadLocalRandom.current().nextBoolean() ? "t1|t2" : ".*")
                         .build();
         runActionWithDefaultEnv(action);
 
@@ -344,6 +348,8 @@ public class KafkaCanalSyncDatabaseActionITCase extends KafkaActionITCaseBase {
                         .withTablePrefix("test_prefix_")
                         .withTableSuffix("_test_suffix")
                         .withTableConfig(getBasicTableConfig())
+                        // test including check with affix
+                        .includingTables(ThreadLocalRandom.current().nextBoolean() ? "t1|t2" : ".*")
                         .build();
         runActionWithDefaultEnv(action);
 
@@ -566,9 +572,46 @@ public class KafkaCanalSyncDatabaseActionITCase extends KafkaActionITCaseBase {
                         .withTableConfig(Collections.singletonMap("table-key", "table-value"))
                         .build();
 
-        assertThat(action.catalogConfig())
-                .containsExactlyEntriesOf(Collections.singletonMap("catalog-key", "catalog-value"));
+        assertThat(action.catalogConfig()).containsEntry("catalog-key", "catalog-value");
         assertThat(action.tableConfig())
                 .containsExactlyEntriesOf(Collections.singletonMap("table-key", "table-value"));
+    }
+
+    @Test
+    @Timeout(60)
+    public void testCaseInsensitive() throws Exception {
+        final String topic = "case-insensitive";
+        createTestTopic(topic, 1, 1);
+
+        // ---------- Write the Canal json into Kafka -------------------
+        writeRecordsToKafka(
+                topic, readLines("kafka/canal/database/case-insensitive/canal-data-1.txt"));
+
+        Map<String, String> kafkaConfig = getBasicKafkaConfig();
+        kafkaConfig.put("value.format", "canal-json");
+        kafkaConfig.put("topic", topic);
+
+        KafkaSyncDatabaseAction action =
+                syncDatabaseActionBuilder(kafkaConfig)
+                        .withTableConfig(getBasicTableConfig())
+                        .withCatalogConfig(
+                                Collections.singletonMap(
+                                        CatalogOptions.METASTORE.key(), "test-case-insensitive"))
+                        .build();
+        runActionWithDefaultEnv(action);
+
+        waitingTables("t1");
+        FileStoreTable table = getFileStoreTable("t1");
+        RowType rowType =
+                RowType.of(
+                        new DataType[] {
+                            DataTypes.INT().notNull(), DataTypes.VARCHAR(10), DataTypes.INT()
+                        },
+                        new String[] {"k1", "v0", "v1"});
+        waitForResult(
+                Arrays.asList("+I[5, five, 50]", "+I[7, seven, 70]"),
+                table,
+                rowType,
+                Collections.singletonList("k1"));
     }
 }

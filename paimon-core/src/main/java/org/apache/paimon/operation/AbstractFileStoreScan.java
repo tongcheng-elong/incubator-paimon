@@ -46,7 +46,9 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -279,6 +281,25 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
                 files.add(file);
             }
         }
+
+        // We group files by bucket here, and filter them by the whole bucket filter.
+        // Why do this: because in primary key table, we can't just filter the value
+        // by the stat in files (see `ChangelogWithKeyFileStoreTable.nonPartitionFilterConsumer`),
+        // but we can do this by filter the whole bucket files
+        files =
+                files.stream()
+                        .collect(
+                                Collectors.groupingBy(
+                                        // we use LinkedHashMap to avoid disorder
+                                        file -> Pair.of(file.partition(), file.bucket()),
+                                        LinkedHashMap::new,
+                                        Collectors.toList()))
+                        .values()
+                        .stream()
+                        .filter(this::filterWholeBucketByStats)
+                        .flatMap(Collection::stream)
+                        .collect(Collectors.toList());
+
         return Pair.of(snapshot, files);
     }
 
@@ -342,6 +363,9 @@ public abstract class AbstractFileStoreScan implements FileStoreScan {
 
     /** Note: Keep this thread-safe. */
     protected abstract boolean filterByStats(ManifestEntry entry);
+
+    /** Note: Keep this thread-safe. */
+    protected abstract boolean filterWholeBucketByStats(List<ManifestEntry> entries);
 
     /** Note: Keep this thread-safe. */
     private List<ManifestEntry> readManifestFileMeta(ManifestFileMeta manifest) {

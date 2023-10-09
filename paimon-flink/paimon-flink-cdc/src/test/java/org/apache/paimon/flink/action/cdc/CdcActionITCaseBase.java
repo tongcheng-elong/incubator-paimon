@@ -18,7 +18,6 @@
 
 package org.apache.paimon.flink.action.cdc;
 
-import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.flink.action.ActionBase;
 import org.apache.paimon.flink.action.ActionITCaseBase;
 import org.apache.paimon.table.FileStoreTable;
@@ -28,7 +27,11 @@ import org.apache.paimon.types.DataField;
 import org.apache.paimon.types.RowType;
 
 import org.apache.flink.api.common.JobStatus;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,9 +53,19 @@ public class CdcActionITCaseBase extends ActionITCaseBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(CdcActionITCaseBase.class);
 
-    protected FileStoreTable getFileStoreTable(String tableName) throws Exception {
-        Identifier identifier = Identifier.create(database, tableName);
-        return (FileStoreTable) catalog.getTable(identifier);
+    protected StreamExecutionEnvironment env;
+
+    @BeforeEach
+    public void setEnv() {
+        env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(2);
+        env.enableCheckpointing(1000);
+        env.setRestartStrategy(RestartStrategies.noRestart());
+    }
+
+    @AfterEach
+    public void closeEnv() throws Exception {
+        env.close();
     }
 
     protected void waitingTables(String... tables) throws Exception {
@@ -200,6 +213,7 @@ public class CdcActionITCaseBase extends ActionITCaseBase {
         protected final List<String> primaryKeys = new ArrayList<>();
         protected final List<String> computedColumnArgs = new ArrayList<>();
         protected final List<String> typeMappingModes = new ArrayList<>();
+        protected final List<String> metadataColumn = new ArrayList<>();
 
         public SyncTableActionBuilder(Map<String, String> sourceConfig) {
             this.sourceConfig = sourceConfig;
@@ -239,6 +253,11 @@ public class CdcActionITCaseBase extends ActionITCaseBase {
             return this;
         }
 
+        public SyncTableActionBuilder<T> withMetadataColumn(List<String> metadataColumn) {
+            this.metadataColumn.addAll(metadataColumn);
+            return this;
+        }
+
         public abstract T build();
     }
 
@@ -257,6 +276,7 @@ public class CdcActionITCaseBase extends ActionITCaseBase {
         @Nullable protected String excludingTables;
         @Nullable protected String mode;
         protected final List<String> typeMappingModes = new ArrayList<>();
+        protected final List<String> metadataColumn = new ArrayList<>();
 
         public SyncDatabaseActionBuilder(Map<String, String> sourceConfig) {
             this.sourceConfig = sourceConfig;
@@ -309,6 +329,11 @@ public class CdcActionITCaseBase extends ActionITCaseBase {
 
         public SyncDatabaseActionBuilder<T> withTypeMappingModes(String... typeMappingModes) {
             this.typeMappingModes.addAll(Arrays.asList(typeMappingModes));
+            return this;
+        }
+
+        public SyncDatabaseActionBuilder<T> withMetadataColumn(List<String> metadataColumn) {
+            this.metadataColumn.addAll(metadataColumn);
             return this;
         }
 

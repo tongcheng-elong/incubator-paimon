@@ -22,8 +22,8 @@ import org.apache.paimon.annotation.VisibleForTesting;
 import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.flink.FlinkConnectorOptions;
 import org.apache.paimon.flink.action.ActionBase;
+import org.apache.paimon.flink.action.cdc.CdcMetadataConverter;
 import org.apache.paimon.flink.action.cdc.ComputedColumn;
-import org.apache.paimon.flink.action.cdc.TableNameConverter;
 import org.apache.paimon.flink.sink.cdc.CdcSinkBuilder;
 import org.apache.paimon.flink.sink.cdc.EventParser;
 import org.apache.paimon.flink.sink.cdc.RichCdcMultiplexRecord;
@@ -39,10 +39,13 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.assertSchemaCompatible;
+import static org.apache.paimon.flink.action.cdc.CdcActionCommonUtils.buildPaimonSchema;
 import static org.apache.paimon.flink.action.cdc.ComputedColumnUtils.buildComputedColumns;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
@@ -70,6 +73,7 @@ public class MongoDBSyncTableAction extends ActionBase {
     private final String database;
     private final String table;
     private final Configuration mongodbConfig;
+    private FileStoreTable fileStoreTable;
     private List<String> partitionKeys = new ArrayList<>();
     private Map<String, String> tableConfig = new HashMap<>();
     private List<String> computedColumnArgs = new ArrayList<>();
@@ -126,31 +130,32 @@ public class MongoDBSyncTableAction extends ActionBase {
             validateCaseInsensitive();
         }
 
-        MongodbSchema mongodbSchema = MongodbSchema.getMongodbSchema(mongodbConfig);
+        Schema mongodbSchema = MongodbSchemaUtils.getMongodbSchema(mongodbConfig, caseSensitive);
         catalog.createDatabase(database, true);
         List<ComputedColumn> computedColumns =
-                buildComputedColumns(computedColumnArgs, mongodbSchema.fields());
+                buildComputedColumns(computedColumnArgs, mongodbSchema);
 
         Identifier identifier = new Identifier(database, table);
-        FileStoreTable table;
-
+        Schema fromMongodb =
+                buildPaimonSchema(
+                        partitionKeys,
+                        Collections.emptyList(),
+                        computedColumns,
+                        tableConfig,
+                        mongodbSchema,
+                        new CdcMetadataConverter[] {});
         // Check if table exists before trying to get or create it
         if (catalog.tableExists(identifier)) {
-            table = (FileStoreTable) catalog.getTable(identifier);
+            fileStoreTable = (FileStoreTable) catalog.getTable(identifier);
+            fileStoreTable = fileStoreTable.copy(tableConfig);
+            assertSchemaCompatible(fileStoreTable.schema(), fromMongodb.fields());
         } else {
-            Schema fromMongodb =
-                    MongoDBActionUtils.buildPaimonSchema(
-                            mongodbSchema,
-                            partitionKeys,
-                            computedColumns,
-                            tableConfig,
-                            caseSensitive);
             catalog.createTable(identifier, fromMongodb, false);
-            table = (FileStoreTable) catalog.getTable(identifier);
+            fileStoreTable = (FileStoreTable) catalog.getTable(identifier);
         }
 
         EventParser.Factory<RichCdcMultiplexRecord> parserFactory =
-                RichCdcMultiplexRecordEventParser::new;
+                () -> new RichCdcMultiplexRecordEventParser(caseSensitive);
 
         CdcSinkBuilder<RichCdcMultiplexRecord> sinkBuilder =
                 new CdcSinkBuilder<RichCdcMultiplexRecord>()
@@ -162,11 +167,10 @@ public class MongoDBSyncTableAction extends ActionBase {
                                         .flatMap(
                                                 new MongoDBRecordParser(
                                                         caseSensitive,
-                                                        new TableNameConverter(caseSensitive),
                                                         computedColumns,
                                                         mongodbConfig)))
                         .withParserFactory(parserFactory)
-                        .withTable(table)
+                        .withTable(fileStoreTable)
                         .withIdentifier(identifier)
                         .withCatalogLoader(catalogLoader());
         String sinkParallelism = tableConfig.get(FlinkConnectorOptions.SINK_PARALLELISM.key());
@@ -202,8 +206,8 @@ public class MongoDBSyncTableAction extends ActionBase {
     }
 
     @VisibleForTesting
-    public Map<String, String> catalogConfig() {
-        return catalogConfig;
+    public FileStoreTable fileStoreTable() {
+        return fileStoreTable;
     }
 
     // ------------------------------------------------------------------------

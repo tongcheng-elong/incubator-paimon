@@ -86,6 +86,7 @@ To use this feature through `flink run`, run the following shell command.
     [--primary-keys <primary-keys>] \
     [--type-mapping <option1,option2...>] \
     [--computed-column <'column-name=expr-name(args[, ...])'> [--computed-column ...]] \
+    [--metadata-column <metadata-column>] \
     [--mysql-conf <mysql-cdc-source-conf> [--mysql-conf <mysql-cdc-source-conf> ...]] \
     [--catalog-conf <paimon-catalog-conf> [--catalog-conf <paimon-catalog-conf> ...]] \
     [--table-conf <paimon-table-sink-conf> [--table-conf <paimon-table-sink-conf> ...]]
@@ -169,6 +170,7 @@ To use this feature through `flink run`, run the following shell command.
     [--including-tables <mysql-table-name|name-regular-expr>] \
     [--excluding-tables <mysql-table-name|name-regular-expr>] \
     [--mode <sync-mode>] \
+    [--metadata-column <metadata-column>] \
     [--type-mapping <option1,option2...>] \
     [--mysql-conf <mysql-cdc-source-conf> [--mysql-conf <mysql-cdc-source-conf> ...]] \
     [--catalog-conf <paimon-catalog-conf> [--catalog-conf <paimon-catalog-conf> ...]] \
@@ -314,7 +316,7 @@ If a message in a Kafka topic is a change event captured from another database u
         </tr>
         <tr>
          <td><a href="https://nightlies.apache.org/flink/flink-docs-stable/docs/connectors/table/formats/maxwell/ >}}">Maxwell CDC</a></td>
-        <td>False</td>
+        <td>True</td>
         </tr>
         <tr>
          <td><a href="https://nightlies.apache.org/flink/flink-docs-stable/docs/connectors/table/formats/ogg/">OGG CDC</a></td>
@@ -324,7 +326,7 @@ If a message in a Kafka topic is a change event captured from another database u
 </table>
 
 {{< hint info >}}
-In Oracle GoldenGate, the data format synchronized to Kafka does not include field data type information. As a result, Paimon sets the data type for all fields to "String" by default.
+In Oracle GoldenGate and Maxwell, the data format synchronized to Kafka does not include field data type information. As a result, Paimon sets the data type for all fields to "String" by default.
 {{< /hint >}}
 
 ### Synchronizing Tables
@@ -450,8 +452,9 @@ Synchronization from multiple Kafka topics to Paimon database.
 ### Prepare MongoDB Bundled Jar
 
 ```
-flink-sql-connector-mongodb-*.jar
+flink-sql-connector-mongodb-cdc-*.jar
 ```
+only cdc 2.4+ is supported
 
 ### Synchronizing Tables
 
@@ -477,13 +480,17 @@ To use this feature through `flink run`, run the following shell command.
 
 Here are a few points to take note of:
 
-1. The "mongodb-conf" introduces the "schema.start.mode" parameter on top of the MongoDB CDC source configuration."schema.start.mode" provides two modes: "dynamic" (default) and "specified".
-In "dynamic" mode, MongoDB schema information is parsed at one level, which forms the basis for schema change evolution.
-In "specified" mode, synchronization takes place according to specified criteria.
-This can be done by configuring "field.name" to specify the synchronization fields and "parser.path" to specify the JSON parsing path for those fields.
-The difference between the two is that the "specify" mode requires the user to explicitly identify the fields to be used and create a mapping table based on those fields.
+1. The `mongodb-conf` introduces the `schema.start.mode` parameter on top of the MongoDB CDC source configuration.`schema.start.mode` provides two modes: `dynamic` (default) and `specified`.
+In `dynamic` mode, MongoDB schema information is parsed at one level, which forms the basis for schema change evolution.
+In `specified` mode, synchronization takes place according to specified criteria.
+This can be done by configuring `field.name` to specify the synchronization fields and `parser.path` to specify the JSON parsing path for those fields.
+The difference between the two is that the `specify` mode requires the user to explicitly identify the fields to be used and create a mapping table based on those fields.
 Dynamic mode, on the other hand, ensures that Paimon and MongoDB always keep the top-level fields consistent, eliminating the need to focus on specific fields.
 Further processing of the data table is required when using values from nested fields.
+2. The `mongodb-conf` introduces the `default.id.generation` parameter as an enhancement to the MongoDB CDC source configuration. The `default.id.generation` setting offers two distinct behaviors: when set to true and when set to false.
+When `default.id.generation` is set to true, the MongoDB CDC source adheres to the default `_id` generation strategy, which involves stripping the outer $oid nesting to provide a more straightforward identifier. This mode simplifies the `_id` representation, making it more direct and user-friendly.
+On the contrary, when `default.id.generation` is set to false, the MongoDB CDC source retains the original `_id` structure, without any additional processing. This mode offers users the flexibility to work with the raw `_id` format as provided by MongoDB, preserving any nested elements like `$oid`.
+The choice between the two hinges on the user's preference: the former for a cleaner, simplified `_id` and the latter for a direct representation of MongoDB's `_id` structure.
 
 {{< generated/mongodb_operator >}}
 
@@ -687,9 +694,10 @@ behaviors of `RENAME TABLE` and `DROP COLUMN` will be ignored, `RENAME COLUMN` w
 you can specify type mapping option `tinyint1-not-bool` (Use `--type-mapping`), then the column will be mapped to TINYINT in Paimon table.
 2. You can use type mapping option `to-nullable` (Use `--type-mapping`) to ignore all NOT NULL constraints (except primary keys).
 3. You can use type mapping option `to-string` (Use `--type-mapping`) to map all MySQL data type to STRING.
-4. MySQL BIT(1) type will be mapped to Boolean.
-5. When using Hive catalog, MySQL TIME type will be mapped to STRING.
-6. MySQL BINARY will be mapped to Paimon VARBINARY. This is because the binary value is passed as bytes in binlog, so it 
+4. You can use type mapping option `char-to-string` (Use `--type-mapping`) to map MySQL CHAR(length)/VARCHAR(length) types to STRING.
+5. MySQL BIT(1) type will be mapped to Boolean.
+6. When using Hive catalog, MySQL TIME type will be mapped to STRING.
+7. MySQL BINARY will be mapped to Paimon VARBINARY. This is because the binary value is passed as bytes in binlog, so it 
 should be mapped to byte type (BYTES or VARBINARY). We choose VARBINARY because it can retain the length information.
 
 ## FAQ
