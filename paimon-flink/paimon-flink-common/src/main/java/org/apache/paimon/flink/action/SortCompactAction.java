@@ -25,7 +25,6 @@ import org.apache.paimon.flink.sorter.TableSorter;
 import org.apache.paimon.flink.source.FlinkSourceBuilder;
 import org.apache.paimon.predicate.Predicate;
 import org.apache.paimon.predicate.PredicateBuilder;
-import org.apache.paimon.table.AppendOnlyFileStoreTable;
 import org.apache.paimon.table.BucketMode;
 import org.apache.paimon.table.FileStoreTable;
 
@@ -45,8 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.paimon.utils.Preconditions.checkArgument;
-
 /** Compact with sort action. */
 public class SortCompactAction extends CompactAction {
 
@@ -63,9 +60,6 @@ public class SortCompactAction extends CompactAction {
             Map<String, String> tableConf) {
         super(warehouse, database, tableName, catalogConfig, tableConf);
 
-        checkArgument(
-                table instanceof AppendOnlyFileStoreTable,
-                "Only sort compaction works with append-only table for now.");
         table = table.copy(Collections.singletonMap(CoreOptions.WRITE_ONLY.key(), "true"));
     }
 
@@ -85,10 +79,9 @@ public class SortCompactAction extends CompactAction {
             env.setRuntimeMode(RuntimeExecutionMode.BATCH);
         }
         FileStoreTable fileStoreTable = (FileStoreTable) table;
-        if (!(fileStoreTable instanceof AppendOnlyFileStoreTable)) {
-            throw new IllegalArgumentException("Sort Compact only supports append-only table yet");
-        }
-        if (fileStoreTable.bucketMode() != BucketMode.UNAWARE) {
+
+        if (fileStoreTable.bucketMode() != BucketMode.UNAWARE
+                && fileStoreTable.bucketMode() != BucketMode.DYNAMIC) {
             throw new IllegalArgumentException("Sort Compact only supports bucket=-1 yet.");
         }
         Map<String, String> tableConfig = fileStoreTable.options();
@@ -117,16 +110,12 @@ public class SortCompactAction extends CompactAction {
         DataStream<RowData> source = sourceBuilder.withEnv(env).withContinuousMode(false).build();
         TableSorter sorter =
                 TableSorter.getSorter(env, source, fileStoreTable, sortStrategy, orderColumns);
-        DataStream<RowData> sorted = sorter.sort();
 
-        FlinkSinkBuilder flinkSinkBuilder = new FlinkSinkBuilder(fileStoreTable);
-        flinkSinkBuilder.withInput(sorted).withOverwritePartition(new HashMap<>());
-        String sinkParallelism = tableConfig.get(FlinkConnectorOptions.SINK_PARALLELISM.key());
-        if (sinkParallelism != null) {
-            flinkSinkBuilder.withParallelism(Integer.parseInt(sinkParallelism));
-        }
-
-        flinkSinkBuilder.build();
+        new FlinkSinkBuilder(fileStoreTable)
+                .withInput(sorter.sort())
+                .forCompact(true)
+                .withOverwritePartition(new HashMap<>())
+                .build();
     }
 
     public SortCompactAction withOrderStrategy(String sortStrategy) {
