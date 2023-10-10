@@ -339,7 +339,7 @@ public class HiveCatalog extends AbstractCatalog {
             updateHmsTable(table, identifier, tableSchema);
             client.createTable(table);
         } catch (Exception e) {
-            Path path = getDataTableLocation(identifier);
+            Path path = super.getDataTableLocation(identifier);
             try {
                 fileIO.deleteDirectoryQuietly(path);
             } catch (Exception ee) {
@@ -559,7 +559,7 @@ public class HiveCatalog extends AbstractCatalog {
         table.setSd(sd);
 
         // update location
-        locationHelper.specifyTableLocation(table, getDataTableLocation(identifier).toString());
+        locationHelper.specifyTableLocation(table, super.getDataTableLocation(identifier).toString());
     }
 
     @VisibleForTesting
@@ -600,7 +600,7 @@ public class HiveCatalog extends AbstractCatalog {
 
     private SchemaManager schemaManager(Identifier identifier) {
         checkIdentifierUpperCase(identifier);
-        return new SchemaManager(fileIO, getDataTableLocation(identifier))
+        return new SchemaManager(fileIO, super.getDataTableLocation(identifier))
                 .withLock(lock(identifier));
     }
 
