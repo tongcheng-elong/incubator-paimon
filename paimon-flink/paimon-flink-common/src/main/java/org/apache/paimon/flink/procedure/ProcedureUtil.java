@@ -19,11 +19,11 @@
 package org.apache.paimon.flink.procedure;
 
 import org.apache.paimon.catalog.Catalog;
-import org.apache.paimon.flink.action.CompactActionFactory;
+import org.apache.paimon.factories.FactoryException;
+import org.apache.paimon.factories.FactoryUtil;
 
 import org.apache.flink.table.procedures.Procedure;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -33,22 +33,23 @@ public class ProcedureUtil {
 
     private ProcedureUtil() {}
 
-    private static final List<String> SYSTEM_PROCEDURES = new ArrayList<>();
-
-    static {
-        SYSTEM_PROCEDURES.add(CompactActionFactory.IDENTIFIER);
-    }
-
     public static List<String> listProcedures() {
-        return Collections.unmodifiableList(SYSTEM_PROCEDURES);
+        return Collections.unmodifiableList(
+                FactoryUtil.discoverIdentifiers(
+                        ProcedureBase.class.getClassLoader(), ProcedureBase.class));
     }
 
     public static Optional<Procedure> getProcedure(Catalog catalog, String procedureName) {
-        switch (procedureName) {
-            case CompactActionFactory.IDENTIFIER:
-                return Optional.of(new CompactProcedure(catalog));
-            default:
-                return Optional.empty();
+        try {
+            ProcedureBase procedure =
+                    FactoryUtil.discoverFactory(
+                                    ProcedureBase.class.getClassLoader(),
+                                    ProcedureBase.class,
+                                    procedureName)
+                            .withCatalog(catalog);
+            return Optional.of(procedure);
+        } catch (FactoryException e) {
+            return Optional.empty();
         }
     }
 }

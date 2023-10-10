@@ -25,32 +25,20 @@ import org.apache.paimon.table.Table;
 import org.apache.flink.table.procedure.ProcedureContext;
 
 /**
- * Rollback procedure. Usage:
+ * Delete tag procedure. Usage:
  *
  * <pre><code>
- *  -- rollback to a snapshot
- *  CALL rollback_to('tableId', snapshotId)
- *
- *  -- rollback to a tag
- *  CALL rollback_to('tableId', 'tagName')
+ *  CALL delete_tag('tableId', 'tagName')
  * </code></pre>
  */
-public class RollbackToProcedure extends ProcedureBase {
+public class DeleteTagProcedure extends ProcedureBase {
 
-    public static final String IDENTIFIER = "rollback_to";
-
-    public String[] call(ProcedureContext procedureContext, String tableId, long snapshotId)
-            throws Catalog.TableNotExistException {
-        Table table = catalog.getTable(Identifier.fromString(tableId));
-        table.rollbackTo(snapshotId);
-
-        return new String[] {"Success"};
-    }
+    public static final String IDENTIFIER = "delete_tag";
 
     public String[] call(ProcedureContext procedureContext, String tableId, String tagName)
             throws Catalog.TableNotExistException {
         Table table = catalog.getTable(Identifier.fromString(tableId));
-        table.rollbackTo(tagName);
+        table.deleteTag(tagName);
 
         return new String[] {"Success"};
     }

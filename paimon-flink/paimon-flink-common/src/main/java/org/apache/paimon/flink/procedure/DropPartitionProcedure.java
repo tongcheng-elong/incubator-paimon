@@ -20,37 +20,37 @@ package org.apache.paimon.flink.procedure;
 
 import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
-import org.apache.paimon.table.Table;
+import org.apache.paimon.operation.FileStoreCommit;
+import org.apache.paimon.table.FileStoreTable;
+import org.apache.paimon.table.sink.BatchWriteBuilder;
 
 import org.apache.flink.table.procedure.ProcedureContext;
 
+import java.util.UUID;
+
+import static org.apache.paimon.utils.Preconditions.checkArgument;
+
 /**
- * Rollback procedure. Usage:
+ * Drop partition procedure. Usage:
  *
  * <pre><code>
- *  -- rollback to a snapshot
- *  CALL rollback_to('tableId', snapshotId)
- *
- *  -- rollback to a tag
- *  CALL rollback_to('tableId', 'tagName')
+ *  CALL drop_partition('tableId', 'partition1', 'partition2', ...)
  * </code></pre>
  */
-public class RollbackToProcedure extends ProcedureBase {
+public class DropPartitionProcedure extends ProcedureBase {
 
-    public static final String IDENTIFIER = "rollback_to";
+    public static final String IDENTIFIER = "drop_partition";
 
-    public String[] call(ProcedureContext procedureContext, String tableId, long snapshotId)
+    public String[] call(
+            ProcedureContext procedureContext, String tableId, String... partitionStrings)
             throws Catalog.TableNotExistException {
-        Table table = catalog.getTable(Identifier.fromString(tableId));
-        table.rollbackTo(snapshotId);
+        checkArgument(
+                partitionStrings.length > 0, "drop-partition procedure must specify partitions.");
 
-        return new String[] {"Success"};
-    }
-
-    public String[] call(ProcedureContext procedureContext, String tableId, String tagName)
-            throws Catalog.TableNotExistException {
-        Table table = catalog.getTable(Identifier.fromString(tableId));
-        table.rollbackTo(tagName);
+        FileStoreTable fileStoreTable =
+                (FileStoreTable) catalog.getTable(Identifier.fromString(tableId));
+        FileStoreCommit commit = fileStoreTable.store().newCommit(UUID.randomUUID().toString());
+        commit.dropPartitions(getPartitions(partitionStrings), BatchWriteBuilder.COMMIT_IDENTIFIER);
 
         return new String[] {"Success"};
     }
