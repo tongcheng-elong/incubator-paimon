@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.apache.flink.table.planner.factories.TestValuesTableFactory.changelogRow;
 import static org.apache.paimon.flink.util.ReadWriteTableTestUtil.init;
@@ -80,13 +81,27 @@ public class ConsumerActionITCase extends ActionITCaseBase {
         assertThat(consumer1.get().nextSnapshot()).isEqualTo(4);
 
         // reset consumer
-        ResetConsumerAction resetConsumerAction =
-                new ResetConsumerAction(
-                        warehouse, database, tableName, Collections.emptyMap(), "myid", 1);
-        resetConsumerAction.run();
-
+        if (ThreadLocalRandom.current().nextBoolean()) {
+            new ResetConsumerAction(warehouse, database, tableName, Collections.emptyMap(), "myid")
+                    .withNextSnapshotIds(1L)
+                    .run();
+        } else {
+            callProcedure(
+                    String.format("CALL reset_consumer('%s.%s', 'myid', 1)", database, tableName));
+        }
         Optional<Consumer> consumer2 = consumerManager.consumer("myid");
         assertThat(consumer2).isPresent();
         assertThat(consumer2.get().nextSnapshot()).isEqualTo(1);
+
+        // delete consumer
+        if (ThreadLocalRandom.current().nextBoolean()) {
+            new ResetConsumerAction(warehouse, database, tableName, Collections.emptyMap(), "myid")
+                    .run();
+        } else {
+            callProcedure(
+                    String.format("CALL reset_consumer('%s.%s', 'myid')", database, tableName));
+        }
+        Optional<Consumer> consumer3 = consumerManager.consumer("myid");
+        assertThat(consumer3).isNotPresent();
     }
 }
