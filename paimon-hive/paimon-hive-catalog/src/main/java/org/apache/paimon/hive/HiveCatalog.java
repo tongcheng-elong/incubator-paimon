@@ -284,13 +284,14 @@ public class HiveCatalog extends AbstractCatalog {
         }
 
         try {
+            Path path = getDataTableLocation(identifier);
+
             client.dropTable(
                     identifier.getDatabaseName(), identifier.getObjectName(), true, false, true);
-            // Deletes table directory to avoid schema in filesystem exists after dropping hive
-            // table successfully to keep the table consistency between which in filesystem and
-            // which in Hive metastore.
-            Path path = getDataTableLocation(identifier);
             try {
+                // Deletes table directory to avoid schema in filesystem exists after dropping hive
+                // table successfully to keep the table consistency between which in filesystem and
+                // which in Hive metastore.
                 if (fileIO.exists(path)) {
                     fileIO.deleteDirectoryQuietly(path);
                 }
