@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.apache.paimon.flink.util.ReadWriteTableTestUtil.init;
 import static org.apache.paimon.flink.util.ReadWriteTableTestUtil.testBatchRead;
@@ -65,9 +66,11 @@ public class RollbackToActionITCase extends ActionITCaseBase {
         writeData(rowData(2L, BinaryString.fromString("World")));
         writeData(rowData(2L, BinaryString.fromString("Flink")));
 
-        RollbackToAction action =
-                new RollbackToAction(warehouse, database, tableName, "2", Collections.emptyMap());
-        action.run();
+        if (ThreadLocalRandom.current().nextBoolean()) {
+            new RollbackToAction(warehouse, database, tableName, "2", Collections.emptyMap()).run();
+        } else {
+            callProcedure(String.format("CALL sys.rollback_to('%s.%s', 2)", database, tableName));
+        }
 
         testBatchRead(
                 "SELECT * FROM `" + tableName + "`",
@@ -94,10 +97,13 @@ public class RollbackToActionITCase extends ActionITCaseBase {
         table.createTag("tag2", 2);
         table.createTag("tag3", 3);
 
-        RollbackToAction action =
-                new RollbackToAction(
-                        warehouse, database, tableName, "tag2", Collections.emptyMap());
-        action.run();
+        if (ThreadLocalRandom.current().nextBoolean()) {
+            new RollbackToAction(warehouse, database, tableName, "tag2", Collections.emptyMap())
+                    .run();
+        } else {
+            callProcedure(
+                    String.format("CALL sys.rollback_to('%s.%s', 'tag2')", database, tableName));
+        }
 
         testBatchRead(
                 "SELECT * FROM `" + tableName + "`",
