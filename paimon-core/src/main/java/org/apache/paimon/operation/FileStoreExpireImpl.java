@@ -86,6 +86,7 @@ public class FileStoreExpireImpl implements FileStoreExpire {
                 new ConsumerManager(snapshotManager.fileIO(), snapshotManager.tablePath());
         this.snapshotDeletion = snapshotDeletion;
         this.tagManager = tagManager;
+        this.expireLimit = expireLimit;
     }
 
     @Override
