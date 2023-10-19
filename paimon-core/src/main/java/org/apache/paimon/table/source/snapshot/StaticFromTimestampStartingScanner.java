@@ -57,7 +57,7 @@ public class StaticFromTimestampStartingScanner extends AbstractStartingScanner 
             return new NoSnapshot();
         }
         LOG.info(
-                "get startingSnapshot:{}, from timestamp:{}", startingSnapshot.id(), startupMillis);
+                "get startingSnapshot:{}, from timestamp:{}", startingSnapshotId, startupMillis);
         return StartingScanner.fromPlan(
                 snapshotReader.withMode(ScanMode.ALL).withSnapshot(startingSnapshotId).read());
     }
