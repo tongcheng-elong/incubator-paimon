@@ -132,7 +132,8 @@ public class CompactDatabaseActionITCase extends CompactActionITCaseBase {
             StreamExecutionEnvironment env = buildDefaultEnv(false);
             new CompactDatabaseAction(warehouse, Collections.emptyMap())
                     .withDatabaseCompactMode(mode)
-                    .build(env);
+                    .withStreamExecutionEnvironment(env)
+                    .build();
             env.execute();
         } else {
             callProcedure(String.format("CALL sys.compact_database('', '%s')", mode), false, true);
@@ -204,7 +205,9 @@ public class CompactDatabaseActionITCase extends CompactActionITCaseBase {
         if (ThreadLocalRandom.current().nextBoolean()) {
             StreamExecutionEnvironment env = buildDefaultEnv(true);
             if (mode.equals("divided")) {
-                new CompactDatabaseAction(warehouse, new HashMap<>()).build(env);
+                new CompactDatabaseAction(warehouse, new HashMap<>())
+                        .withStreamExecutionEnvironment(env)
+                        .build();
             } else {
                 // if CoreOptions.CONTINUOUS_DISCOVERY_INTERVAL.key() use default value, the cost
                 // time in combined mode will be over 1 min
@@ -213,7 +216,8 @@ public class CompactDatabaseActionITCase extends CompactActionITCaseBase {
                         .withTableOptions(
                                 Collections.singletonMap(
                                         CoreOptions.CONTINUOUS_DISCOVERY_INTERVAL.key(), "1s"))
-                        .build(env);
+                        .withStreamExecutionEnvironment(env)
+                        .build();
             }
             env.executeAsync();
         } else {
@@ -472,7 +476,7 @@ public class CompactDatabaseActionITCase extends CompactActionITCaseBase {
                         Collections.singletonMap(
                                 CoreOptions.CONTINUOUS_DISCOVERY_INTERVAL.key(), "1s"));
             }
-            action.build(env);
+            action.withStreamExecutionEnvironment(env).build();
             env.execute();
         } else {
             if (mode.equals("divided")) {
@@ -570,7 +574,9 @@ public class CompactDatabaseActionITCase extends CompactActionITCaseBase {
 
         if (ThreadLocalRandom.current().nextBoolean()) {
             StreamExecutionEnvironment env = buildDefaultEnv(true);
-            new CompactDatabaseAction(warehouse, new HashMap<>()).build(env);
+            new CompactDatabaseAction(warehouse, new HashMap<>())
+                    .withStreamExecutionEnvironment(env)
+                    .build();
             env.executeAsync();
         } else {
             callProcedure("CALL sys.compact_database()");
@@ -637,7 +643,9 @@ public class CompactDatabaseActionITCase extends CompactActionITCaseBase {
 
         if (ThreadLocalRandom.current().nextBoolean()) {
             StreamExecutionEnvironment env = buildDefaultEnv(false);
-            new CompactDatabaseAction(warehouse, new HashMap<>()).build(env);
+            new CompactDatabaseAction(warehouse, new HashMap<>())
+                    .withStreamExecutionEnvironment(env)
+                    .build();
             env.execute();
         } else {
             callProcedure("CALL sys.compact_database()", false, true);
