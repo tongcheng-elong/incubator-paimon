@@ -246,13 +246,6 @@ public class CoreOptions implements Serializable {
                     .defaultValue(MemorySize.parse("64 mb"))
                     .withDescription("Amount of data to spill records to disk in spilled sort.");
 
-    @Immutable
-    public static final ConfigOption<WriteMode> WRITE_MODE =
-            key("write-mode")
-                    .enumType(WriteMode.class)
-                    .defaultValue(WriteMode.AUTO)
-                    .withDescription("Specify the write mode for table.");
-
     public static final ConfigOption<Boolean> WRITE_ONLY =
             key("write-only")
                     .booleanType()
@@ -671,12 +664,13 @@ public class CoreOptions implements Serializable {
                             "Full compaction will be constantly triggered after delta commits.");
 
     @ExcludeFromDocumentation("Internal use only")
-    public static final ConfigOption<StreamingCompactionType> STREAMING_COMPACT =
-            key("streaming-compact")
-                    .enumType(StreamingCompactionType.class)
-                    .defaultValue(StreamingCompactionType.NONE)
+    public static final ConfigOption<StreamScanMode> STREAM_SCAN_MODE =
+            key("stream-scan-mode")
+                    .enumType(StreamScanMode.class)
+                    .defaultValue(StreamScanMode.NONE)
                     .withDescription(
-                            "Only used to force TableScan to construct suitable 'StartingUpScanner' and 'FollowUpScanner' dedicated streaming compaction job.");
+                            "Only used to force TableScan to construct suitable 'StartingUpScanner' and 'FollowUpScanner' "
+                                    + "dedicated internal streaming scan.");
 
     public static final ConfigOption<StreamingReadMode> STREAMING_READ_MODE =
             key("streaming-read-mode")
@@ -886,15 +880,25 @@ public class CoreOptions implements Serializable {
                                     + "this can avoid maintaining too many indexes and lead to worse and worse performance, "
                                     + "but please note that this may also cause data duplication.");
 
-    public static final ConfigOption<String> CROSS_PARTITION_UPSERT_BOOTSTRAP_MIN_PARTITION =
-            key("cross-partition-upsert.bootstrap-min-partition")
-                    .stringType()
-                    .noDefaultValue()
+    public static final ConfigOption<Integer> CROSS_PARTITION_UPSERT_BOOTSTRAP_PARALLELISM =
+            key("cross-partition-upsert.bootstrap-parallelism")
+                    .intType()
+                    .defaultValue(10)
                     .withDescription(
-                            "The min partition bootstrap of rocksdb index for cross partition upsert (primary keys not contain all partition fields), "
-                                    + "bootstrap will only read the partitions above it, and the smaller partitions will not be read into the index. "
-                                    + "This can reduce job startup time and excessive initialization of index, "
-                                    + "but please note that this may also cause data duplication.");
+                            "The parallelism for bootstrap in a single task for cross partition upsert.");
+
+    public static final ConfigOption<Integer> ZORDER_VAR_LENGTH_CONTRIBUTION =
+            key("zorder.var-length-contribution")
+                    .intType()
+                    .defaultValue(8)
+                    .withDescription(
+                            "The bytes of types (CHAR, VARCHAR, BINARY, VARBINARY) devote to the zorder sort.");
+
+    public static final ConfigOption<MemorySize> FILE_READER_ASYNC_THRESHOLD =
+            key("file-reader-async-threshold")
+                    .memoryType()
+                    .defaultValue(MemorySize.ofMebiBytes(10))
+                    .withDescription("The threshold for read file async.");
 
     private final Options options;
 
@@ -982,6 +986,10 @@ public class CoreOptions implements Serializable {
 
     public String fileCompression() {
         return options.get(FILE_COMPRESSION);
+    }
+
+    public MemorySize fileReaderAsyncThreshold() {
+        return options.get(FILE_READER_ASYNC_THRESHOLD);
     }
 
     public int snapshotNumRetainMin() {
@@ -1214,10 +1222,6 @@ public class CoreOptions implements Serializable {
         return Arrays.asList(padding.split(","));
     }
 
-    public WriteMode writeMode() {
-        return options.get(WRITE_MODE);
-    }
-
     public boolean writeOnly() {
         return options.get(WRITE_ONLY);
     }
@@ -1330,8 +1334,12 @@ public class CoreOptions implements Serializable {
         return options.get(CROSS_PARTITION_UPSERT_INDEX_TTL);
     }
 
-    public String crossPartitionUpsertBootstrapMinPartition() {
-        return options.get(CROSS_PARTITION_UPSERT_BOOTSTRAP_MIN_PARTITION);
+    public int crossPartitionUpsertBootstrapParallelism() {
+        return options.get(CROSS_PARTITION_UPSERT_BOOTSTRAP_PARALLELISM);
+    }
+
+    public int varTypeSize() {
+        return options.get(ZORDER_VAR_LENGTH_CONTRIBUTION);
     }
 
     /** Specifies the merge engine for table with primary key. */
@@ -1615,16 +1623,18 @@ public class CoreOptions implements Serializable {
         }
     }
 
-    /** Compaction type when trigger a compaction action. */
-    public enum StreamingCompactionType implements DescribedEnum {
-        NONE("none", "Not a streaming compaction."),
-        NORMAL("normal", "Compaction for traditional bucket table."),
-        BUCKET_UNAWARE("unaware", "Compaction for unaware bucket table.");
+    /** Inner stream scan mode for some internal requirements. */
+    public enum StreamScanMode implements DescribedEnum {
+        NONE("none", "No requirement."),
+        COMPACT_BUCKET_TABLE("compact-bucket-table", "Compaction for traditional bucket table."),
+        COMPACT_APPEND_NO_BUCKET(
+                "compact-append-no-bucket", "Compaction for append table with bucket unaware."),
+        FILE_MONITOR("file-monitor", "Monitor data file changes.");
 
         private final String value;
         private final String description;
 
-        StreamingCompactionType(String value, String description) {
+        StreamScanMode(String value, String description) {
             this.value = value;
             this.description = description;
         }
@@ -1641,22 +1651,6 @@ public class CoreOptions implements Serializable {
 
         public String getValue() {
             return value;
-        }
-
-        @VisibleForTesting
-        public static StreamingCompactionType fromValue(String value) {
-            for (StreamingCompactionType formatType : StreamingCompactionType.values()) {
-                if (formatType.value.equals(value)) {
-                    return formatType;
-                }
-            }
-            throw new IllegalArgumentException(
-                    String.format(
-                            "Invalid format type %s, only support [%s]",
-                            value,
-                            StringUtils.join(
-                                    Arrays.stream(StreamingCompactionType.values()).iterator(),
-                                    ",")));
         }
     }
 

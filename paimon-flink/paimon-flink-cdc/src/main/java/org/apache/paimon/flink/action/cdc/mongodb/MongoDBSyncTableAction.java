@@ -22,7 +22,6 @@ import org.apache.paimon.annotation.VisibleForTesting;
 import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.flink.FlinkConnectorOptions;
 import org.apache.paimon.flink.action.ActionBase;
-import org.apache.paimon.flink.action.cdc.CdcMetadataConverter;
 import org.apache.paimon.flink.action.cdc.ComputedColumn;
 import org.apache.paimon.flink.sink.cdc.CdcSinkBuilder;
 import org.apache.paimon.flink.sink.cdc.EventParser;
@@ -35,7 +34,6 @@ import com.ververica.cdc.connectors.mongodb.source.MongoDBSource;
 import com.ververica.cdc.connectors.mongodb.source.config.MongoDBSourceOptions;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -110,7 +108,7 @@ public class MongoDBSyncTableAction extends ActionBase {
     }
 
     @Override
-    public void build(StreamExecutionEnvironment env) throws Exception {
+    public void build() throws Exception {
         checkArgument(
                 mongodbConfig.contains(MongoDBSourceOptions.COLLECTION),
                 String.format(
@@ -133,7 +131,7 @@ public class MongoDBSyncTableAction extends ActionBase {
         Schema mongodbSchema = MongodbSchemaUtils.getMongodbSchema(mongodbConfig, caseSensitive);
         catalog.createDatabase(database, true);
         List<ComputedColumn> computedColumns =
-                buildComputedColumns(computedColumnArgs, mongodbSchema);
+                buildComputedColumns(computedColumnArgs, mongodbSchema.fields());
 
         Identifier identifier = new Identifier(database, table);
         Schema fromMongodb =
@@ -142,8 +140,7 @@ public class MongoDBSyncTableAction extends ActionBase {
                         Collections.emptyList(),
                         computedColumns,
                         tableConfig,
-                        mongodbSchema,
-                        new CdcMetadataConverter[] {});
+                        mongodbSchema);
         // Check if table exists before trying to get or create it
         if (catalog.tableExists(identifier)) {
             fileStoreTable = (FileStoreTable) catalog.getTable(identifier);
@@ -216,8 +213,7 @@ public class MongoDBSyncTableAction extends ActionBase {
 
     @Override
     public void run() throws Exception {
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        build(env);
+        build();
         execute(env, String.format("MongoDB-Paimon Database Sync: %s", database));
     }
 }

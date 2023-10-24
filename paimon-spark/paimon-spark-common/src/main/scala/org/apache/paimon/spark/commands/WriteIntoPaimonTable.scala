@@ -122,8 +122,9 @@ case class WriteIntoPaimonTable(
     val commitMessages = df
       .mapPartitions {
         iter =>
+          val ioManager = createIOManager
           val write = writeBuilder.newWrite()
-          write.withIOManager(createIOManager)
+          write.withIOManager(ioManager)
           try {
             iter.foreach {
               row =>
@@ -135,20 +136,23 @@ case class WriteIntoPaimonTable(
             write.prepareCommit().asScala.map(serializer.serialize).toIterator
           } finally {
             write.close()
+            ioManager.close()
           }
       }
       .collect()
       .map(deserializeCommitMessage(serializer, _))
 
+    val tableCommit = if (overwritePartition == null) {
+      writeBuilder.newCommit()
+    } else {
+      writeBuilder.withOverwrite(overwritePartition.asJava).newCommit()
+    }
     try {
-      val tableCommit = if (overwritePartition == null) {
-        writeBuilder.newCommit()
-      } else {
-        writeBuilder.withOverwrite(overwritePartition.asJava).newCommit()
-      }
       tableCommit.commit(commitMessages.toList.asJava)
     } catch {
       case e: Throwable => throw new RuntimeException(e);
+    } finally {
+      tableCommit.close();
     }
 
     Seq.empty

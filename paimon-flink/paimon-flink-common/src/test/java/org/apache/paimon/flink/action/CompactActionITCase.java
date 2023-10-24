@@ -290,7 +290,8 @@ public class CompactActionITCase extends CompactActionITCaseBase {
 
         new CompactAction(warehouse, database, tableName)
                 .withPartitions(getSpecifiedPartitions())
-                .build(env);
+                .withStreamExecutionEnvironment(env)
+                .build();
         if (isStreaming) {
             env.executeAsync();
         } else {
@@ -301,7 +302,7 @@ public class CompactActionITCase extends CompactActionITCaseBase {
     private void callProcedure(boolean isStreaming) {
         callProcedure(
                 String.format(
-                        "CALL compact('%s.%s', '%s')",
+                        "CALL sys.compact('%s.%s', '%s')",
                         database, tableName, "dt=20221208,hh=15;dt=20221209,hh=15"),
                 isStreaming,
                 !isStreaming);

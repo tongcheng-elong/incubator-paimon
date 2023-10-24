@@ -52,7 +52,7 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
 
     protected final String commitUser;
     protected final StoreSinkWriteState state;
-    private final IOManager ioManager;
+    private final IOManagerImpl paimonIOManager;
     private final boolean ignorePreviousFiles;
     private final boolean waitCompaction;
     private final boolean isStreamingMode;
@@ -115,7 +115,7 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
             @Nullable MemoryPoolFactory memoryPoolFactory) {
         this.commitUser = commitUser;
         this.state = state;
-        this.ioManager = ioManager;
+        this.paimonIOManager = new IOManagerImpl(ioManager.getSpillingDirectoriesPaths());
         this.ignorePreviousFiles = ignorePreviousFiles;
         this.waitCompaction = waitCompaction;
         this.isStreamingMode = isStreamingMode;
@@ -132,13 +132,9 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
         TableWriteImpl<?> tableWrite =
                 table.newWrite(
                                 commitUser,
-                                // with manifestCache use filter
-                                table.coreOptions().writeManifestCache().getMebiBytes() > 0
-                                        ? (part, bucket) ->
-                                                state.stateValueFilter()
-                                                        .filter(table.name(), part, bucket)
-                                        : null)
-                        .withIOManager(new IOManagerImpl(ioManager.getSpillingDirectoriesPaths()))
+                                (part, bucket) ->
+                                        state.stateValueFilter().filter(table.name(), part, bucket))
+                        .withIOManager(paimonIOManager)
                         .withIgnorePreviousFiles(ignorePreviousFiles)
                         .isStreamingMode(isStreamingMode);
 
@@ -220,6 +216,8 @@ public class StoreSinkWriteImpl implements StoreSinkWrite {
         if (write != null) {
             write.close();
         }
+
+        paimonIOManager.close();
     }
 
     @Override

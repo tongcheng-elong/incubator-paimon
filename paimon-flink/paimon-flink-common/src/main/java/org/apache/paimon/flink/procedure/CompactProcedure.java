@@ -19,7 +19,6 @@
 package org.apache.paimon.flink.procedure;
 
 import org.apache.paimon.catalog.AbstractCatalog;
-import org.apache.paimon.catalog.Catalog;
 import org.apache.paimon.catalog.Identifier;
 import org.apache.paimon.flink.action.ActionFactory;
 import org.apache.paimon.flink.action.CompactAction;
@@ -38,23 +37,19 @@ import java.util.Map;
  *  -- NOTE: use '' as placeholder for optional arguments
  *
  *  -- compact a table (tableId should be 'database_name.table_name')
- *  CALL compact('tableId')
+ *  CALL sys.compact('tableId')
  *
  *  -- compact specific partitions ('pt1=A,pt2=a;pt1=B,pt2=b', ...)
- *  CALL compact('tableId', 'pt1=A,pt2=a;pt1=B,pt2=b')
+ *  CALL sys.compact('tableId', 'pt1=A,pt2=a;pt1=B,pt2=b')
  *
  *  -- compact a table with sorting
- *  CALL compact('tableId', 'partitions', 'ORDER/ZORDER', 'col1,col2', 'sink.parallelism=6')
+ *  CALL sys.compact('tableId', 'partitions', 'ORDER/ZORDER', 'col1,col2', 'sink.parallelism=6')
  *
  * </code></pre>
  */
 public class CompactProcedure extends ProcedureBase {
 
-    public static final String NAME = "compact";
-
-    public CompactProcedure(Catalog catalog) {
-        super(catalog);
-    }
+    public static final String IDENTIFIER = "compact";
 
     public String[] call(ProcedureContext procedureContext, String tableId) throws Exception {
         return call(procedureContext, tableId, "");
@@ -122,5 +117,10 @@ public class CompactProcedure extends ProcedureBase {
         }
 
         return execute(procedureContext, action, jobName);
+    }
+
+    @Override
+    public String identifier() {
+        return IDENTIFIER;
     }
 }

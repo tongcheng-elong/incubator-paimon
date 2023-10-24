@@ -171,6 +171,10 @@ tblproperties (
 
 ## Insert Table
 
+{{< hint info >}}
+Paimon currently supports Spark 3.2+ for SQL write.
+{{< /hint >}}
+
 ```sql
 INSERT INTO my_table VALUES (1, 'Hi'), (2, 'Hello');
 ```
@@ -243,7 +247,7 @@ Paimon Structured Streaming only supports the two `append` and `complete` modes.
 // Create a paimon table if not exists.
 spark.sql(s"""
            |CREATE TABLE T (k INT, v STRING)
-           |TBLPROPERTIES ('primary-key'='a', 'write-mode'='change-log', 'bucket'='3')
+           |TBLPROPERTIES ('primary-key'='a', 'bucket'='3')
            |""".stripMargin)
 
 // Here we use MemoryStream to fake a streaming source.
@@ -396,6 +400,27 @@ val query = spark.readStream
   .writeStream
   .format("console")
   .start()
+```
+
+Paimon Structured Streaming supports read row in the form of changelog (add rowkind column in row to represent its 
+change type) by setting `read.changelog` to true (default is false).
+
+**Example:**
+
+```scala
+// no any scan-related configs are provided, that will use latest-full scan mode.
+val query = spark.readStream
+  .format("paimon")
+  .option("read.changelog", "true")
+  .load("/path/to/paimon/source/table")
+  .writeStream
+  .format("console")
+  .start()
+
+/*
++I   1  Hi
++I   2  Hello
+*/
 ```
 
 ## Spark Type Conversion
