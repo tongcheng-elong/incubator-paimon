@@ -18,6 +18,7 @@
 
 package org.apache.paimon.flink.sink;
 
+import org.apache.flink.table.data.RowData;
 import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.table.FileStoreTable;
 
@@ -41,19 +42,19 @@ public class DynamicBucketCompactSink extends RowDynamicBucketSink {
     }
 
     @Override
-    public DataStreamSink<?> build(DataStream<InternalRow> input, @Nullable Integer parallelism) {
+    public DataStreamSink<?> build(DataStream<RowData> input, @Nullable Integer parallelism) {
         String initialCommitUser = UUID.randomUUID().toString();
 
         // This input is sorted and compacted. So there is no shuffle here, we just assign bucket
         // for each record, and sink them to table.
 
         // bucket-assigner
-        HashBucketAssignerOperator<InternalRow> assignerOperator =
+        HashBucketAssignerOperator<RowData> assignerOperator =
                 new HashBucketAssignerOperator<>(
                         initialCommitUser, table, extractorFunction(), true);
-        TupleTypeInfo<Tuple2<InternalRow, Integer>> rowWithBucketType =
+        TupleTypeInfo<Tuple2<RowData, Integer>> rowWithBucketType =
                 new TupleTypeInfo<>(input.getType(), BasicTypeInfo.INT_TYPE_INFO);
-        DataStream<Tuple2<InternalRow, Integer>> bucketAssigned =
+        DataStream<Tuple2<RowData, Integer>> bucketAssigned =
                 input.transform("dynamic-bucket-assigner", rowWithBucketType, assignerOperator)
                         .setParallelism(input.getParallelism());
         return sinkFrom(bucketAssigned, initialCommitUser);
