@@ -182,7 +182,7 @@ public class MergeIntoActionFactory implements ActionFactory {
                 "  It will find matched rows of target table that meet condition (T.k = S.k), then update T.v with S.v where (T.v <> S.v).");
     }
 
-    private void validate(MergeIntoAction action) {
+    public static void validate(MergeIntoAction action) {
         if (!action.matchedUpsert
                 && !action.notMatchedUpsert
                 && !action.matchedDelete
