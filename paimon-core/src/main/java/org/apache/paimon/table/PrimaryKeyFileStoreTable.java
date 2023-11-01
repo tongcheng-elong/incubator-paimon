@@ -193,6 +193,9 @@ public class PrimaryKeyFileStoreTable extends AbstractFileStoreTable {
                 createRowKeyExtractor(),
                 record -> {
                     InternalRow row = record.row();
+                    if(store().options().supportDeleteByType()){
+                        setRowKindByBinlogType(row);
+                    }
                     long sequenceNumber =
                             sequenceGenerator == null
                                     ? KeyValue.UNKNOWN_SEQUENCE
@@ -203,5 +206,17 @@ public class PrimaryKeyFileStoreTable extends AbstractFileStoreTable {
                                     : rowKindGenerator.generate(row);
                     return kv.replace(record.primaryKey(), sequenceNumber, rowKind, row);
                 });
+    }
+
+    public void setRowKindByBinlogType(InternalRow row){
+        RowType rowType = schema().logicalRowType();
+        int index = rowType.getFieldNames().indexOf("binlog_eventtype");
+        if(index <0){
+            return;
+        }
+        String  binlog_eventtype = row.getString(index).toString();
+        if(binlog_eventtype.equalsIgnoreCase("delete")){
+            row.setRowKind(RowKind.DELETE);
+        }
     }
 }
