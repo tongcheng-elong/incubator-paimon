@@ -112,9 +112,7 @@ public class RocksDBStateFactory implements Closeable {
                 writer.put(key, value);
             } catch (Throwable throwable) {
                 logQueue.add(new String(key));
-                for (int i = 0; i < logQueue.size(); i++) {
-                    LOG.error("recently key is :" + logQueue.poll());
-                }
+                LOG.error("recently key is :" + logQueue);
                 throw new RuntimeException("Error while writing to SST file. key is :" + new String(key), throwable);
             }
 
