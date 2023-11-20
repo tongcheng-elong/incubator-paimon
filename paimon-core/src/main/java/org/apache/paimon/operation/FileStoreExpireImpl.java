@@ -165,8 +165,7 @@ public class FileStoreExpireImpl implements FileStoreExpire {
         endExclusiveId = Math.min(beginInclusiveId + expireLimit, endExclusiveId);
 
         if (LOG.isInfoEnabled()) {
-            LOG.info(
-                    "Snapshot expire range is [" + beginInclusiveId + ", " + endExclusiveId + ")");
+            LOG.info("Snapshot expire range is [" + beginInclusiveId + ", " + endExclusiveId + ")");
         }
 
         List<Snapshot> taggedSnapshots = tagManager.taggedSnapshots();

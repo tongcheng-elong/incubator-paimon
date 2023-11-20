@@ -44,7 +44,6 @@ import org.apache.paimon.table.source.KeyValueTableRead;
 import org.apache.paimon.table.source.MergeTreeSplitGenerator;
 import org.apache.paimon.table.source.SplitGenerator;
 import org.apache.paimon.table.source.ValueContentRowDataRecordIterator;
-import org.apache.paimon.types.DataType;
 import org.apache.paimon.types.RowKind;
 import org.apache.paimon.types.RowType;
 
@@ -197,7 +196,7 @@ public class ChangelogWithKeyFileStoreTable extends AbstractFileStoreTable {
                 store().newWrite(commitUser, manifestFilter),
                 createRowKeyExtractor(),
                 record -> {
-                    if(store().options().supportDeleteByType()){
+                    if (store().options().supportDeleteByType()) {
                         setRowKindByBinlogType(record.row());
                     }
                     long sequenceNumber =
@@ -212,14 +211,14 @@ public class ChangelogWithKeyFileStoreTable extends AbstractFileStoreTable {
                 });
     }
 
-    public void setRowKindByBinlogType(InternalRow row){
+    public void setRowKindByBinlogType(InternalRow row) {
         RowType rowType = schema().logicalRowType();
         int index = rowType.getFieldNames().indexOf("binlog_eventtype");
-        if(index <0){
+        if (index < 0) {
             return;
         }
-        String  binlog_eventtype = row.getString(index).toString();
-        if(binlog_eventtype.equalsIgnoreCase("delete")){
+        String binlog_eventtype = row.getString(index).toString();
+        if (binlog_eventtype.equalsIgnoreCase("delete")) {
             row.setRowKind(RowKind.DELETE);
         }
     }

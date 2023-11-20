@@ -552,6 +552,12 @@ This config option does not affect the default filesystem metastore.</td>
             <td>Whether to read the changes from overwrite in streaming mode.</td>
         </tr>
         <tr>
+            <td><h5>support-delete-by-type</h5></td>
+            <td style="word-wrap: break-word;">false</td>
+            <td>Boolean</td>
+            <td>If set to true, when binlog_eventtype value is 'delete',the row will be deleted</td>
+        </tr>
+        <tr>
             <td><h5>tag.automatic-creation</h5></td>
             <td style="word-wrap: break-word;">none</td>
             <td><p>Enum</p></td>

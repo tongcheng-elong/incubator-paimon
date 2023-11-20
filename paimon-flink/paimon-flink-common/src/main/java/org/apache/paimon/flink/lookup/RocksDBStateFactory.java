@@ -33,6 +33,8 @@ import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.SstFileWriter;
 import org.rocksdb.TtlDB;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -43,15 +45,19 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingDeque;
 
 /** Factory to create state. */
 public class RocksDBStateFactory implements Closeable {
 
     public static final String MERGE_OPERATOR_NAME = "stringappendtest";
+    private final static Logger LOG = LoggerFactory.getLogger(RocksDBStateFactory.class);
 
     private final Options options;
     private final String path;
     private final ColumnFamilyOptions columnFamilyOptions;
+
+    private final FixedSizeQueue<String> logQueue;
 
     private RocksDB db;
     private int sstIndex = 0;
@@ -72,6 +78,7 @@ public class RocksDBStateFactory implements Closeable {
                         .setMergeOperatorName(MERGE_OPERATOR_NAME);
 
         this.options = new Options(dbOptions, columnFamilyOptions);
+        this.logQueue = new FixedSizeQueue<>(100);
         try {
             this.db =
                     ttlSecs == null
@@ -92,6 +99,7 @@ public class RocksDBStateFactory implements Closeable {
         while (iterator.advanceNext()) {
             byte[] key = iterator.getKey();
             byte[] value = iterator.getValue();
+            logQueue.add(new String(key));
 
             if (writer == null) {
                 writer = new SstFileWriter(new EnvOptions(), options);
@@ -100,7 +108,16 @@ public class RocksDBStateFactory implements Closeable {
                 files.add(path);
             }
 
-            writer.put(key, value);
+            try {
+                writer.put(key, value);
+            } catch (Throwable throwable) {
+                logQueue.add(new String(key));
+                for (int i = 0; i < logQueue.size(); i++) {
+                    LOG.error("recently key is :" + logQueue.poll());
+                }
+                throw new RuntimeException("Error while writing to SST file. key is :" + new String(key), throwable);
+            }
+
             recordNum++;
             if (recordNum % 1000 == 0 && writer.fileSize() >= targetFileSize) {
                 writer.finish();
