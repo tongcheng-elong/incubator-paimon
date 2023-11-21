@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -39,9 +40,11 @@ import static org.apache.paimon.utils.FileUtils.listVersionedFileStatus;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 
 /** Manager for {@code Tag}. */
-public class TagManager {
+public class TagManager implements Serializable {
 
     private static final Logger LOG = LoggerFactory.getLogger(TagManager.class);
+
+    private static final long serialVersionUID = 1L;
 
     private static final String TAG_PREFIX = "tag-";
 
