@@ -219,7 +219,7 @@ public abstract class FlinkSink<T> implements Serializable {
                             table::tagManager,
                             () -> table.store().newTagDeletion());
         }
-        if (Options.fromMap(table.options()).get(SINK_FINISH_GENERATAR_TAG)) {
+        if (conf.get(ExecutionOptions.RUNTIME_MODE) == RuntimeExecutionMode.BATCH && Options.fromMap(table.options()).get(SINK_FINISH_GENERATAR_TAG)) {
             committerOperator =
                     new SinkFinishGeneratorTagOperator<>(
                             (CommitterOperator<Committable, ManifestCommittable>) committerOperator,

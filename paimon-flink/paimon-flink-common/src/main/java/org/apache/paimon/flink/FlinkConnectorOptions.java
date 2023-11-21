@@ -288,7 +288,7 @@ public class FlinkConnectorOptions {
                     .booleanType()
                     .defaultValue(false)
                     .withDescription(
-                            "If true, tags will be generated after flink sink is completed, generally used in flink batch scenarios.");
+                            "In batch processing scenario, if true, tags will be generated after flink sink is completed, generally used in flink batch scenarios.");
 
     public static List<ConfigOption<?>> getOptions() {
         final Field[] fields = FlinkConnectorOptions.class.getFields();
