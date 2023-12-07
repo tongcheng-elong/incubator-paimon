@@ -28,11 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.function.Predicate;
 
 import static org.apache.paimon.utils.FileUtils.listVersionedFileStatus;
@@ -116,7 +112,7 @@ public class TagManager {
         Snapshot right = snapshotManager.earliestSnapshot();
         if (index + 1 < taggedSnapshots.size()) {
             Snapshot rightTag = taggedSnapshots.get(index + 1);
-            right = right.id() < rightTag.id() ? right : rightTag;
+            right = Objects.requireNonNull(right).id() < rightTag.id() ? right : rightTag;
         }
         skippedSnapshots.add(right);
 
