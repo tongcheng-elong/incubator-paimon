@@ -223,9 +223,7 @@ public abstract class FlinkSink<T> implements Serializable {
             committerOperator =
                     new SinkFinishGeneratorTagOperator<>(
                             (CommitterOperator<Committable, ManifestCommittable>) committerOperator,
-                            table::snapshotManager,
-                            table::tagManager,
-                            () -> table.store().newTagDeletion());
+                            table);
         }
         SingleOutputStreamOperator<?> committed =
                 written.transform(

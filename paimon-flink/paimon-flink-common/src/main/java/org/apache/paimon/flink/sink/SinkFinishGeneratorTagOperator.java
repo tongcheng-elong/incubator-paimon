@@ -31,9 +31,14 @@ import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus;
 import org.apache.paimon.Snapshot;
 import org.apache.paimon.operation.TagDeletion;
-import org.apache.paimon.utils.SerializableSupplier;
+import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.utils.SnapshotManager;
 import org.apache.paimon.utils.TagManager;
+
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Commit {@link Committable} for snapshot using the {@link CommitterOperator}.
@@ -49,22 +54,14 @@ public class SinkFinishGeneratorTagOperator<CommitT, GlobalCommitT> implements
 
     private final CommitterOperator<CommitT, GlobalCommitT> commitOperator;
 
-    protected SnapshotManager snapshotManager;
-
-    protected TagManager tagManager;
-
-    protected TagDeletion tagDeletion;
+    protected final FileStoreTable table;
 
     public SinkFinishGeneratorTagOperator(
             CommitterOperator<CommitT, GlobalCommitT> commitOperator,
-            SerializableSupplier<SnapshotManager> snapshotManagerFactory,
-            SerializableSupplier<TagManager> tagManagerFactory,
-            SerializableSupplier<TagDeletion> tagDeletionFactory
+            FileStoreTable table
     ) {
+        this.table = table;
         this.commitOperator = commitOperator;
-        this.snapshotManager = snapshotManagerFactory.get();
-        this.tagManager = tagManagerFactory.get();
-        this.tagDeletion = tagDeletionFactory.get();
     }
 
     @Override
@@ -93,16 +90,23 @@ public class SinkFinishGeneratorTagOperator<CommitT, GlobalCommitT> implements
     }
 
     private void createTag() {
+        SnapshotManager snapshotManager = table.snapshotManager();
         Snapshot snapshot = snapshotManager.latestSnapshot();
+        TagManager tagManager = table.tagManager();
+        TagDeletion tagDeletion = table.store().newTagDeletion();
         if (snapshot == null) {
             return;
         }
-        String tagName = SINK_FINISH_TAG_PREFIX + snapshot.id();
+        Instant instant = Instant.ofEpochMilli(snapshot.timeMillis());
+        LocalDateTime localDateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+        String tagName = SINK_FINISH_TAG_PREFIX + localDateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         try {
-            if (!tagManager.tagExists(tagName)) {
-                tagManager.createTag(snapshot, tagName);
+            if (tagManager.tagExists(tagName)) {
+                tagManager.deleteTag(tagName, tagDeletion, snapshotManager);
             }
+            tagManager.createTag(snapshot, tagName);
         } catch (Exception e) {
+            e.printStackTrace();
             if (tagManager.tagExists(tagName)) {
                 tagManager.deleteTag(tagName, tagDeletion, snapshotManager);
             }
