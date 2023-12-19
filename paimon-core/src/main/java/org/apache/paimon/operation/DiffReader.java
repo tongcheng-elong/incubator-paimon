@@ -44,14 +44,15 @@ public class DiffReader {
             RecordReader<KeyValue> afterReader,
             Comparator<InternalRow> keyComparator,
             MergeSorter sorter,
-            boolean keepDelete)
+            boolean keepDelete,
+            boolean sequenceUseHash)
             throws IOException {
         return sorter.mergeSort(
                 Arrays.asList(
                         () -> wrapLevelToReader(beforeReader, BEFORE_LEVEL),
                         () -> wrapLevelToReader(afterReader, AFTER_LEVEL)),
                 keyComparator,
-                new DiffMerger(keepDelete));
+                new DiffMerger(keepDelete, sequenceUseHash));
     }
 
     private static RecordReader<KeyValue> wrapLevelToReader(
@@ -94,10 +95,13 @@ public class DiffReader {
 
         private final boolean keepDelete;
 
+        private final boolean sequenceUseHash;
+
         private final List<KeyValue> kvs = new ArrayList<>();
 
-        public DiffMerger(boolean keepDelete) {
+        public DiffMerger(boolean keepDelete, boolean sequenceUseHash) {
             this.keepDelete = keepDelete;
+            this.sequenceUseHash = sequenceUseHash;
         }
 
         @Override
@@ -123,6 +127,12 @@ public class DiffReader {
                     return kv;
                 }
             } else if (kvs.size() == 2) {
+                if (sequenceUseHash) {
+                    if (kvs.get(0).sequenceNumber() == kvs.get(1).sequenceNumber()) {
+                        return null;
+                    }
+                    kvs.sort(Comparator.comparingLong(KeyValue::level));
+                }
                 KeyValue latest = kvs.get(1);
                 if (latest.level() == AFTER_LEVEL) {
                     return latest;

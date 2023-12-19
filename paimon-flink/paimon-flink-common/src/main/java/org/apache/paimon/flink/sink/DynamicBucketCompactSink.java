@@ -18,8 +18,6 @@
 
 package org.apache.paimon.flink.sink;
 
-import org.apache.flink.table.data.RowData;
-import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.table.FileStoreTable;
 
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
@@ -27,6 +25,7 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
+import org.apache.flink.table.data.RowData;
 
 import javax.annotation.Nullable;
 

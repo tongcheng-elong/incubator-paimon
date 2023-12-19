@@ -85,6 +85,8 @@ public class KeyValueFileStoreRead implements FileStoreRead<KeyValue> {
 
     private boolean forceKeepDelete = false;
 
+    private boolean sequenceUseHash = false;
+
     public KeyValueFileStoreRead(
             FileIO fileIO,
             SchemaManager schemaManager,
@@ -115,6 +117,7 @@ public class KeyValueFileStoreRead implements FileStoreRead<KeyValue> {
         this.mergeSorter =
                 new MergeSorter(
                         CoreOptions.fromMap(tableSchema.options()), keyType, valueType, null);
+        this.sequenceUseHash = options.sequenceUseHash();
     }
 
     public KeyValueFileStoreRead withKeyProjection(int[][] projectedFields) {
@@ -213,7 +216,8 @@ public class KeyValueFileStoreRead implements FileStoreRead<KeyValue> {
                                     split.partition(), split.bucket(), split.dataFiles(), false),
                             keyComparator,
                             mergeSorter,
-                            forceKeepDelete);
+                            forceKeepDelete,
+                            sequenceUseHash);
         }
     }
 

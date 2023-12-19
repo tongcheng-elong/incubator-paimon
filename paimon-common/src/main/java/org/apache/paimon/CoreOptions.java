@@ -416,6 +416,14 @@ public class CoreOptions implements Serializable {
                             "The field that generates the sequence number for primary key table,"
                                     + " the sequence number determines which data is the most recent.");
 
+    public static final ConfigOption<Boolean> SEQUENCE_USE_HASH =
+            key("sequence.use-hash")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "The field that generates the sequence number for primary key table,"
+                                    + " the sequence number determines which data is the most recent.");
+
     public static final ConfigOption<String> SEQUENCE_AUTO_PADDING =
             key("sequence.auto-padding")
                     .stringType()
@@ -1226,6 +1234,14 @@ public class CoreOptions implements Serializable {
         return options.getOptional(SEQUENCE_FIELD);
     }
 
+    public Boolean sequenceUseHash() {
+        Boolean useHash = options.get(SEQUENCE_USE_HASH);
+        if (useHash == null) {
+            return false;
+        }
+        return useHash;
+    }
+
     public List<String> sequenceAutoPadding() {
         String padding = options.get(SEQUENCE_AUTO_PADDING);
         if (padding == null) {
@@ -1361,7 +1377,6 @@ public class CoreOptions implements Serializable {
     public boolean supportDeleteByType() {
         return options.get(SUPPORT_DELETE_BY_TYPE);
     }
-
 
     /** Specifies the merge engine for table with primary key. */
     public enum MergeEngine implements DescribedEnum {

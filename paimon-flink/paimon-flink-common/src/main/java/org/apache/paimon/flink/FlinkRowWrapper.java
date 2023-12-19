@@ -31,6 +31,8 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.logical.LogicalType;
 
+import java.util.Objects;
+
 import static org.apache.paimon.flink.FlinkRowData.toFlinkRowKind;
 import static org.apache.paimon.flink.LogicalTypeConversion.toDataType;
 
@@ -131,6 +133,11 @@ public class FlinkRowWrapper implements InternalRow {
     @Override
     public InternalRow getRow(int pos, int numFields) {
         return new FlinkRowWrapper(row.getRow(pos, numFields));
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(row);
     }
 
     private static class FlinkArrayWrapper implements InternalArray {
