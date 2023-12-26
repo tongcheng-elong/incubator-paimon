@@ -981,6 +981,12 @@ public class CoreOptions implements Serializable {
                     .memoryType()
                     .defaultValue(MemorySize.ofMebiBytes(10))
                     .withDescription("The threshold for read file async.");
+    public static final ConfigOption<Boolean> SUPPORT_DELETE_BY_TYPE =
+            key("support-delete-by-type")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "If set to true, when binlog_eventtype value is 'delete',the row will be deleted");
 
     private final Options options;
 
@@ -1473,6 +1479,11 @@ public class CoreOptions implements Serializable {
     public int varTypeSize() {
         return options.get(ZORDER_VAR_LENGTH_CONTRIBUTION);
     }
+
+    public boolean supportDeleteByType() {
+        return options.get(SUPPORT_DELETE_BY_TYPE);
+    }
+
 
     /** Specifies the merge engine for table with primary key. */
     public enum MergeEngine implements DescribedEnum {
