@@ -333,7 +333,7 @@ public abstract class AbstractFileStoreWrite<T> implements FileStoreWrite<T> {
         if (LOG.isDebugEnabled()) {
             LOG.debug("Creating writer for partition {}, bucket {}", partition, bucket);
         }
-
+        final long startTs = System.currentTimeMillis();
         Long latestSnapshotId = snapshotManager.latestSnapshotId();
         List<DataFileMeta> restoreFiles = new ArrayList<>();
         if (!ignorePreviousFiles && latestSnapshotId != null) {
@@ -347,6 +347,11 @@ public abstract class AbstractFileStoreWrite<T> implements FileStoreWrite<T> {
         RecordWriter<T> writer =
                 createWriter(partition.copy(), bucket, restoreFiles, null, compactExecutor());
         notifyNewWriter(writer);
+        LOG.info(
+                "Creating writer for partition {}, bucket {}, time {} ms",
+                partition,
+                bucket,
+                System.currentTimeMillis() - startTs);
         return new WriterContainer<>(writer, indexMaintainer, latestSnapshotId);
     }
 
