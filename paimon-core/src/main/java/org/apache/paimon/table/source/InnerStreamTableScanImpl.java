@@ -123,11 +123,13 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
             currentWatermark = scannedResult.currentWatermark();
             long currentSnapshotId = scannedResult.currentSnapshotId();
             nextSnapshotId = currentSnapshotId + 1;
+            LOG.info("start scan from snapshot:{}",currentSnapshotId);
             isFullPhaseEnd =
                     boundedChecker.shouldEndInput(snapshotManager.snapshot(currentSnapshotId));
             return scannedResult.plan();
         } else if (result instanceof StartingScanner.NextSnapshot) {
             nextSnapshotId = ((StartingScanner.NextSnapshot) result).nextSnapshotId();
+            LOG.info("start scan from next snapshot:{}",nextSnapshotId);
             isFullPhaseEnd =
                     snapshotManager.snapshotExists(nextSnapshotId - 1)
                             && boundedChecker.shouldEndInput(
@@ -174,7 +176,7 @@ public class InnerStreamTableScanImpl extends AbstractInnerTableScan
                 nextSnapshotId++;
                 return overwritePlan;
             } else if (followUpScanner.shouldScanSnapshot(snapshot)) {
-                LOG.debug("Find snapshot id {}.", nextSnapshotId);
+                LOG.info("Find snapshot id {}.", nextSnapshotId);
                 SnapshotReader.Plan plan = followUpScanner.scan(nextSnapshotId, snapshotReader);
                 currentWatermark = plan.watermark();
                 nextSnapshotId++;

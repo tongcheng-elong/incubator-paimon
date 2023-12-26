@@ -200,7 +200,7 @@ public class RowDataStoreWriteOperator extends TableWriteOperator<InternalRow> {
     }
     public Map<BinaryRow, Map<Integer, AbstractFileStoreWrite.WriterContainer<?>>> getWriters(){
         TableWriteImpl<?> writeImpl= ((StoreSinkWriteImpl) write).write;
-        AbstractFileStoreWrite abstractFileStoreWrite = writeImpl.getWrite();
+        AbstractFileStoreWrite abstractFileStoreWrite = (AbstractFileStoreWrite) writeImpl.getWrite();
         return abstractFileStoreWrite.getWriters();
     }
 

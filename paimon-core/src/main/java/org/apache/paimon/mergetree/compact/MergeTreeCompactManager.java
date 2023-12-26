@@ -107,8 +107,8 @@ public class MergeTreeCompactManager extends CompactFutureManager {
                     taskFuture == null,
                     "A compaction task is still running while the user "
                             + "forces a new compaction. This is unexpected.");
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(
+            if (LOG.isInfoEnabled()) {
+                LOG.info(
                         "Trigger forced full compaction. Picking from the following runs\n{}",
                         runs);
             }
@@ -117,8 +117,8 @@ public class MergeTreeCompactManager extends CompactFutureManager {
             if (taskFuture != null) {
                 return;
             }
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Trigger normal compaction. Picking from the following runs\n{}", runs);
+            if (LOG.isInfoEnabled()) {
+                LOG.info("Trigger normal compaction. Picking from the following runs\n{}", runs);
             }
             optionalUnit =
                     strategy.pick(levels.numberOfLevels(), runs)
@@ -143,8 +143,8 @@ public class MergeTreeCompactManager extends CompactFutureManager {
                             unit.outputLevel() != 0
                                     && unit.outputLevel() >= levels.nonEmptyHighestLevel();
 
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug(
+                    if (LOG.isInfoEnabled()) {
+                        LOG.info(
                                 "Submit compaction with files (name, level, size): "
                                         + levels.levelSortedRuns().stream()
                                                 .flatMap(lsr -> lsr.run().files().stream())
@@ -170,8 +170,8 @@ public class MergeTreeCompactManager extends CompactFutureManager {
         MergeTreeCompactTask task =
                 new MergeTreeCompactTask(
                         keyComparator, compactionFileSize, rewriter, unit, dropDelete, metrics);
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(
+        if (LOG.isInfoEnabled()) {
+            LOG.info(
                     "Pick these files (name, level, size) for compaction: {}",
                     unit.files().stream()
                             .map(

@@ -25,6 +25,8 @@ import org.apache.paimon.table.source.snapshot.SnapshotReader;
 import org.apache.paimon.table.source.snapshot.StartingScanner;
 import org.apache.paimon.table.source.snapshot.StartingScanner.ScannedResult;
 import org.apache.paimon.utils.SnapshotManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -34,6 +36,8 @@ import java.util.Map;
 
 /** {@link TableScan} implementation for batch planning. */
 public class InnerTableScanImpl extends AbstractInnerTableScan {
+
+    private static final Logger LOG = LoggerFactory.getLogger(InnerTableScanImpl.class);
 
     private final SnapshotManager snapshotManager;
     private final DefaultValueAssigner defaultValueAssigner;
@@ -82,6 +86,10 @@ public class InnerTableScanImpl extends AbstractInnerTableScan {
             hasNext = false;
             StartingScanner.Result result = startingScanner.scan(snapshotReader);
             StartingScanner.Result limitedResult = applyPushDownLimit(result);
+
+            if(limitedResult instanceof StartingScanner.ScannedResult){
+                LOG.info("start scan from snapshot:{}",((StartingScanner.ScannedResult) limitedResult).currentSnapshotId());
+            }
             return DataFilePlan.fromResult(limitedResult);
         } else {
             throw new EndOfScanException();

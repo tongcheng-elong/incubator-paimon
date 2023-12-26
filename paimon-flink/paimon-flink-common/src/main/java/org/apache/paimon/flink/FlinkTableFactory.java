@@ -29,12 +29,17 @@ import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.factories.DynamicTableFactory;
 import org.apache.flink.table.factories.FactoryUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.paimon.CoreOptions.AUTO_CREATE;
 import static org.apache.paimon.flink.FlinkCatalogFactory.IDENTIFIER;
 
 /** A paimon {@link DynamicTableFactory} to create source and sink. */
 public class FlinkTableFactory extends AbstractFlinkTableFactory {
+
+    protected static final Logger LOG = LoggerFactory.getLogger(FlinkTableFactory.class);
+
 
     @Override
     public String factoryIdentifier() {
@@ -54,6 +59,7 @@ public class FlinkTableFactory extends AbstractFlinkTableFactory {
                     context.isTemporary());
         }
         createTableIfNeeded(context);
+        LOG.info("table:{} with options:{}",context.getObjectIdentifier(),context.getCatalogTable().getOptions());
         return super.createDynamicTableSource(context);
     }
 
@@ -70,6 +76,7 @@ public class FlinkTableFactory extends AbstractFlinkTableFactory {
                     context.isTemporary());
         }
         createTableIfNeeded(context);
+        LOG.info("table:{} with options:{}",context.getObjectIdentifier(),context.getCatalogTable().getOptions());
         return super.createDynamicTableSink(context);
     }
 
