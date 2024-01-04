@@ -182,7 +182,9 @@ public abstract class AbstractInnerTableScan implements InnerTableScan {
                         return new IncrementalTagStartingScanner(
                                 snapshotManager,
                                 incrementalBetween.getLeft(),
-                                incrementalBetween.getRight());
+                                incrementalBetween.getRight(),
+                                scanMode,
+                                options.tagCreationMode());
                     }
                 } else {
                     return new IncrementalTimeStampStartingScanner(

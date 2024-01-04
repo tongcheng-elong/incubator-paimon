@@ -18,6 +18,7 @@
 
 package org.apache.paimon.flink.sink;
 
+import org.apache.paimon.CoreOptions;
 import org.apache.paimon.Snapshot;
 import org.apache.paimon.operation.TagDeletion;
 import org.apache.paimon.table.FileStoreTable;
@@ -54,8 +55,8 @@ import java.util.SortedMap;
  */
 public class BatchWriteGeneratorTagOperator<CommitT, GlobalCommitT>
         implements OneInputStreamOperator<CommitT, CommitT>,
-                SetupableStreamOperator,
-                BoundedOneInput {
+        SetupableStreamOperator,
+        BoundedOneInput {
 
     private static final String BATCH_WRITE_TAG_PREFIX = "batch-write-";
 
@@ -112,12 +113,24 @@ public class BatchWriteGeneratorTagOperator<CommitT, GlobalCommitT>
                 BATCH_WRITE_TAG_PREFIX
                         + localDateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         try {
-            // If the tag already exists, delete the tag
+            // Check whether the tag exists
             if (tagManager.tagExists(tagName)) {
-                tagManager.deleteTag(tagName, tagDeletion, snapshotManager);
+                // When tag already exists, we want to consider different scenarios.
+                // If the table type is lookup or full-compaction, and there is no changelog created,
+                // then the data hasn't changed and compaction doesn't create a tag
+                CoreOptions.ChangelogProducer changelogProducer =
+                        this.table.coreOptions().changelogProducer();
+                if (!((changelogProducer == CoreOptions.ChangelogProducer.LOOKUP
+                        || changelogProducer
+                        == CoreOptions.ChangelogProducer.FULL_COMPACTION)
+                        && snapshot.changelogRecordCount() == 0)) {
+                    tagManager.deleteTag(tagName, tagDeletion, snapshotManager);
+                    tagManager.createTag(snapshot, tagName);
+                }
+            } else {
+                // If the tag does not exist, it is created
+                tagManager.createTag(snapshot, tagName);
             }
-            // Create a new tag
-            tagManager.createTag(snapshot, tagName);
             // Expire the tag
             expireTag();
         } catch (Exception e) {
