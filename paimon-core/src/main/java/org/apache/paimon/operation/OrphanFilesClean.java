@@ -132,12 +132,14 @@ public class OrphanFilesClean {
         Set<String> deleted = new HashSet<>(candidates.keySet());
         deleted.removeAll(usedFiles);
 
-        LOG.info("Ready to clean orphan files : " + deleted.toString());
+        LOG.info("Ready to clean orphan files size:{} " ,deleted.size());
         for (String file : deleted) {
             Path path = candidates.get(file);
+            LOG.info("Ready to clean orphan file {} " ,path.toString());
             deleteFileOrDirQuietly(path);
         }
         deletedFilesNum += deleted.size();
+        LOG.info("Finish to clean orphan files size:{} " ,deletedFilesNum);
 
         return deletedFilesNum;
     }
