@@ -192,6 +192,20 @@ public class HiveCatalog extends AbstractCatalog {
             throw new RuntimeException("Can not get table " + identifier + " from metastore.", e);
         }
     }
+    public Path getDatabaseLocation(String databaseName){
+        try {
+            if (databaseExistsImpl(databaseName)) {
+                String location =
+                        locationHelper.getDatabaseLocation(client.getDatabase(databaseName));
+                if (location != null) {
+                    return new Path(location);
+                }
+            }
+        } catch (TException e) {
+            throw new RuntimeException("Can not get database " + databaseName + " from metastore.", e);
+        }
+        return null;
+    }
 
     @Override
     public List<String> listDatabases() {
