@@ -115,12 +115,13 @@ public class FileStoreExpireImpl implements FileStoreExpire {
         // locate the first snapshot between the numRetainedMax th and (numRetainedMin+1) th latest
         // snapshots to be retained. This snapshot needs to be preserved because it
         // doesn't fulfill the time threshold condition for expiration.
+        int count = 0;
         for (long id = Math.max(latestSnapshotId - numRetainedMax + 1, earliest);
                 id <= latestSnapshotId - numRetainedMin;
                 id++) {
+            count++;
             if (snapshotManager.snapshotExists(id)
-                    && currentMillis - snapshotManager.snapshot(id).timeMillis()
-                            <= millisRetained) {
+                    &&  (currentMillis - snapshotManager.snapshot(id).timeMillis() <= millisRetained || count>=expireLimit)) {
                 // within time threshold, can assume that all snapshots after it are also within
                 // the threshold
                 expireUntil(earliest, id);
