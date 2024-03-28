@@ -45,6 +45,7 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
     protected transient StoreSinkWrite write;
     private transient long snapshotDelayMinuteGauge = 0L;
     private transient long snapshotCleanDelayMinuteGauge = 0L;
+    private transient long snapshotGapGauge = 0L;
     private transient long latestSnapshotIdentifyId = 0L;
 
     public TableWriteOperator(
@@ -139,6 +140,10 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
                         (Gauge<Long>) () -> snapshotCleanDelayMinuteGauge);
         getMetricGroup()
                 .gauge(
+                        "paimonSnapshotGapGauge",
+                        (Gauge<Long>) () -> snapshotGapGauge);
+        getMetricGroup()
+                .gauge(
                         "paimonLatestSnapshotIdentify",
                         (Gauge<Long>) () -> latestSnapshotIdentifyId);
     }
@@ -146,6 +151,7 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
     private void updateMetrics() {
         try {
             final Snapshot latestSnapShot = table.snapshotManager().latestSnapshot();
+            final Snapshot earliestSnapshot = table.snapshotManager().earliestSnapshot();
             if (latestSnapShot != null) {
                 snapshotDelayMinuteGauge =
                         TimeUnit.MINUTES.convert(
@@ -154,8 +160,9 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
                 snapshotCleanDelayMinuteGauge =
                         TimeUnit.MINUTES.convert(
                                 latestSnapShot.timeMillis()
-                                        - table.snapshotManager().earliestSnapshot().timeMillis(),
+                                        - earliestSnapshot.timeMillis(),
                                 TimeUnit.MILLISECONDS);
+                snapshotGapGauge = latestSnapShot.id() - earliestSnapshot.id();
                 // dedicate recovery use state
                 latestSnapshotIdentifyId = latestSnapShot.commitIdentifier();
             }
