@@ -1362,7 +1362,6 @@ public class CoreOptions implements Serializable {
         return options.get(SUPPORT_DELETE_BY_TYPE);
     }
 
-
     /** Specifies the merge engine for table with primary key. */
     public enum MergeEngine implements DescribedEnum {
         DEDUPLICATE("deduplicate", "De-duplicate and keep the last row."),

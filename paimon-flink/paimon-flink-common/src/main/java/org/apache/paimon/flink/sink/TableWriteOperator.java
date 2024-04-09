@@ -138,10 +138,7 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
                 .gauge(
                         "paimonSnapshotCleanDelayMinuteGauge",
                         (Gauge<Long>) () -> snapshotCleanDelayMinuteGauge);
-        getMetricGroup()
-                .gauge(
-                        "paimonSnapshotGapGauge",
-                        (Gauge<Long>) () -> snapshotGapGauge);
+        getMetricGroup().gauge("paimonSnapshotGapGauge", (Gauge<Long>) () -> snapshotGapGauge);
         getMetricGroup()
                 .gauge(
                         "paimonLatestSnapshotIdentify",
@@ -159,8 +156,7 @@ public abstract class TableWriteOperator<IN> extends PrepareCommitOperator<IN, C
                                 TimeUnit.MILLISECONDS);
                 snapshotCleanDelayMinuteGauge =
                         TimeUnit.MINUTES.convert(
-                                latestSnapShot.timeMillis()
-                                        - earliestSnapshot.timeMillis(),
+                                latestSnapShot.timeMillis() - earliestSnapshot.timeMillis(),
                                 TimeUnit.MILLISECONDS);
                 snapshotGapGauge = latestSnapShot.id() - earliestSnapshot.id();
                 // dedicate recovery use state
