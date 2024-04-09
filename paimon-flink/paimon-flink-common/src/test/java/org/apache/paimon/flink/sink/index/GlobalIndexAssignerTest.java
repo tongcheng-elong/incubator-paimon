@@ -18,10 +18,6 @@
 
 package org.apache.paimon.flink.sink.index;
 
-import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.table.data.GenericRowData;
-import org.apache.flink.table.data.RowData;
-import org.apache.flink.types.RowKind;
 import org.apache.paimon.CoreOptions;
 import org.apache.paimon.CoreOptions.MergeEngine;
 import org.apache.paimon.catalog.Identifier;
@@ -30,6 +26,11 @@ import org.apache.paimon.options.Options;
 import org.apache.paimon.schema.Schema;
 import org.apache.paimon.table.TableTestBase;
 import org.apache.paimon.types.DataTypes;
+
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -43,13 +44,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Test for {@link GlobalIndexAssigner}. */
 public class GlobalIndexAssignerTest extends TableTestBase {
 
-    private GlobalIndexAssigner<RowData> createAssigner(MergeEngine mergeEngine)
-            throws Exception {
+    private GlobalIndexAssigner<RowData> createAssigner(MergeEngine mergeEngine) throws Exception {
         return createAssigner(mergeEngine, false);
     }
 
-    private GlobalIndexAssigner<RowData> createAssigner(
-            MergeEngine mergeEngine, boolean enableTtl) throws Exception {
+    private GlobalIndexAssigner<RowData> createAssigner(MergeEngine mergeEngine, boolean enableTtl)
+            throws Exception {
         Identifier identifier = identifier("T");
         Options options = new Options();
         options.set(CoreOptions.MERGE_ENGINE, mergeEngine);
@@ -89,8 +89,7 @@ public class GlobalIndexAssignerTest extends TableTestBase {
     }
 
     private void innerTestBucketAssign(boolean enableTtl) throws Exception {
-        GlobalIndexAssigner<RowData> assigner =
-                createAssigner(MergeEngine.DEDUPLICATE, enableTtl);
+        GlobalIndexAssigner<RowData> assigner = createAssigner(MergeEngine.DEDUPLICATE, enableTtl);
         List<Integer> output = new ArrayList<>();
         assigner.open(
                 ioManager(),

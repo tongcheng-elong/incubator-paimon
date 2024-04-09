@@ -121,7 +121,8 @@ public class FileStoreExpireImpl implements FileStoreExpire {
                 id++) {
             count++;
             if (snapshotManager.snapshotExists(id)
-                    &&  (currentMillis - snapshotManager.snapshot(id).timeMillis() <= millisRetained || count>=expireLimit)) {
+                    && (currentMillis - snapshotManager.snapshot(id).timeMillis() <= millisRetained
+                            || count >= expireLimit)) {
                 // within time threshold, can assume that all snapshots after it are also within
                 // the threshold
                 expireUntil(earliest, id);
@@ -166,8 +167,7 @@ public class FileStoreExpireImpl implements FileStoreExpire {
         endExclusiveId = Math.min(beginInclusiveId + expireLimit, endExclusiveId);
 
         if (LOG.isInfoEnabled()) {
-            LOG.info(
-                    "Snapshot expire range is [" + beginInclusiveId + ", " + endExclusiveId + ")");
+            LOG.info("Snapshot expire range is [" + beginInclusiveId + ", " + endExclusiveId + ")");
         }
 
         List<Snapshot> taggedSnapshots = tagManager.taggedSnapshots();
