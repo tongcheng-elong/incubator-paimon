@@ -18,6 +18,7 @@
 
 package org.apache.paimon.flink.source.operator;
 
+import org.apache.paimon.flink.sink.ChannelComputer;
 import org.apache.paimon.flink.utils.JavaTypeInfo;
 import org.apache.paimon.table.source.DataSplit;
 import org.apache.paimon.table.source.EndOfScanException;
@@ -32,7 +33,6 @@ import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.LongSerializer;
-import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.runtime.TupleSerializer;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -233,21 +233,18 @@ public class MonitorFunction extends RichSourceFunction<Split>
             ReadBuilder readBuilder,
             long monitorInterval,
             boolean emitSnapshotWatermark) {
-        KeySelector<Split, Integer> keySelector =
-                split -> {
-                    if (((DataSplit) split).partition() != null) {
-                        return Math.abs(((DataSplit) split).partition().hashCode())
-                                + ((DataSplit) split).bucket();
-                    } else {
-                        return ((DataSplit) split).bucket();
-                    }
-                };
         return env.addSource(
                         new MonitorFunction(readBuilder, monitorInterval, emitSnapshotWatermark),
                         name + "-Monitor",
                         new JavaTypeInfo<>(Split.class))
                 .forceNonParallel()
-                .partitionCustom((key, numPartitions) -> key % numPartitions, keySelector)
+                .partitionCustom(
+                        (key, numPartitions) ->
+                                ChannelComputer.select(key.f0, key.f1, numPartitions),
+                        split -> {
+                            DataSplit dataSplit = (DataSplit) split;
+                            return Tuple2.of(dataSplit.partition(), dataSplit.bucket());
+                        })
                 .transform(name + "-Reader", typeInfo, new ReadOperator(readBuilder));
     }
 }
