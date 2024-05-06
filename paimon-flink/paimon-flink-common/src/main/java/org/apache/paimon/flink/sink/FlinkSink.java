@@ -162,7 +162,7 @@ public abstract class FlinkSink<T> implements Serializable {
                 conf.get(ExecutionOptions.RUNTIME_MODE) == RuntimeExecutionMode.STREAMING;
 
         // partitioner parallelism
-        Integer calParallelism = input.getParallelism();
+        Integer calParallelism = parallelism == null ? input.getParallelism() : parallelism;
         if (table.options().get(FlinkConnectorOptions.SINK_PARALLELISM.key()) == null) {
             // batch and with writeManifestCache
             if (!isStreaming && table.coreOptions().writeManifestCache().getMebiBytes() > 0) {
