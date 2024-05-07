@@ -220,9 +220,6 @@ public class TableCommitImpl implements InnerTableCommit {
     }
 
     private void expire(long partitionExpireIdentifier, ExecutorService executor) {
-        if (expireError.get() != null) {
-            throw new RuntimeException(expireError.get());
-        }
 
         executor.execute(
                 () -> {
