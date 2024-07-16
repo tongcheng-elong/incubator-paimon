@@ -19,6 +19,7 @@
 package org.apache.paimon.flink.source;
 
 import org.apache.paimon.annotation.VisibleForTesting;
+import org.apache.paimon.data.BinaryRow;
 import org.apache.paimon.flink.source.assigners.FIFOSplitAssigner;
 import org.apache.paimon.flink.source.assigners.PreAssignSplitAssigner;
 import org.apache.paimon.flink.source.assigners.SplitAssigner;
@@ -237,7 +238,10 @@ public class ContinuousFileSplitEnumerator
     }
 
     protected int assignSuggestedTask(FileStoreSourceSplit split) {
-        return ((DataSplit) split.split()).bucket() % context.currentParallelism();
+        BinaryRow partition = ((DataSplit) split.split()).partition();
+        int startChannel = Math.abs(partition.hashCode()) % context.currentParallelism();
+        return (startChannel + ((DataSplit) split.split()).bucket()) % context.currentParallelism();
+        // return ((DataSplit) split.split()).bucket() % context.currentParallelism();
     }
 
     protected SplitAssigner createSplitAssigner(BucketMode bucketMode) {
