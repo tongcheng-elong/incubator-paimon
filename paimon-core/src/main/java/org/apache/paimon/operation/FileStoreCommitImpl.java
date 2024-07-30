@@ -238,8 +238,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
             ManifestCommittable committable,
             Map<String, String> properties,
             boolean checkAppendFiles) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Ready to commit\n" + committable.toString());
+        if (LOG.isInfoEnabled()) {
+            LOG.info("Ready to commit\n" + committable.toString());
         }
 
         long started = System.nanoTime();
@@ -803,14 +803,14 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                         ? snapshotManager.snapshotPath(newSnapshotId)
                         : snapshotManager.copyWithBranch(branchName).snapshotPath(newSnapshotId);
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Ready to commit table files to snapshot #" + newSnapshotId);
+        if (LOG.isInfoEnabled()) {
+            LOG.info("Ready to commit table files to snapshot #" + newSnapshotId);
             for (ManifestEntry entry : tableFiles) {
-                LOG.debug("  * " + entry.toString());
+                LOG.info("  * " + entry.toString());
             }
-            LOG.debug("Ready to commit changelog to snapshot #" + newSnapshotId);
+            LOG.info("Ready to commit changelog to snapshot #" + newSnapshotId);
             for (ManifestEntry entry : changelogFiles) {
-                LOG.debug("  * " + entry.toString());
+                LOG.info("  * " + entry.toString());
             }
         }
 
