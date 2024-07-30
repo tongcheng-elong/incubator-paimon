@@ -110,4 +110,12 @@ public class CatalogOptions {
                                             TextElement.text(
                                                     "\"custom\": You can implement LineageMetaFactory and LineageMeta to store lineage information in customized storage."))
                                     .build());
+
+    public static final ConfigOption<Boolean> ALLOW_UPPER_CASE =
+            ConfigOptions.key("allow-upper-case")
+                    .booleanType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Indicates whether this catalog allow upper case, "
+                                    + "its default value depends on the implementation of the specific catalog.");
 }
