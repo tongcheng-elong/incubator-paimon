@@ -130,17 +130,6 @@ public abstract class AbstractCatalog implements Catalog {
     }
 
     @Override
-    public boolean databaseExists(String databaseName) {
-        if (isSystemDatabase(databaseName)) {
-            return true;
-        }
-
-        return databaseExistsImpl(databaseName);
-    }
-
-    protected abstract boolean databaseExistsImpl(String databaseName);
-
-    @Override
     public void createDatabase(String name, boolean ignoreIfExists, Map<String, String> properties)
             throws DatabaseAlreadyExistException {
         checkNotSystemDatabase(name);
@@ -159,26 +148,25 @@ public abstract class AbstractCatalog implements Catalog {
         if (isSystemDatabase(name)) {
             return Collections.emptyMap();
         }
-        if (!databaseExists(name)) {
-            throw new DatabaseNotExistException(name);
-        }
         return loadDatabasePropertiesImpl(name);
     }
 
-    protected abstract Map<String, String> loadDatabasePropertiesImpl(String name);
+    protected abstract Map<String, String> loadDatabasePropertiesImpl(String name)
+            throws DatabaseNotExistException;
 
     @Override
     public void dropPartition(Identifier identifier, Map<String, String> partitionSpec)
             throws TableNotExistException {
         Table table = getTable(identifier);
         FileStoreTable fileStoreTable = (FileStoreTable) table;
-        FileStoreCommit commit =
+        try (FileStoreCommit commit =
                 fileStoreTable
                         .store()
                         .newCommit(
-                                createCommitUser(fileStoreTable.coreOptions().toConfiguration()));
-        commit.dropPartitions(
-                Collections.singletonList(partitionSpec), BatchWriteBuilder.COMMIT_IDENTIFIER);
+                                createCommitUser(fileStoreTable.coreOptions().toConfiguration()))) {
+            commit.dropPartitions(
+                    Collections.singletonList(partitionSpec), BatchWriteBuilder.COMMIT_IDENTIFIER);
+        }
     }
 
     protected abstract void createDatabaseImpl(String name, Map<String, String> properties);
@@ -348,14 +336,13 @@ public abstract class AbstractCatalog implements Catalog {
             String type = splits[1];
             FileStoreTable originTable =
                     getDataTable(new Identifier(identifier.getDatabaseName(), tableName));
-            Table table = SystemTableLoader.load(type, fileIO, originTable);
+            Table table = SystemTableLoader.load(type, originTable);
             if (table == null) {
                 throw new TableNotExistException(identifier);
             }
             return table;
         } else {
-            Table table = getDataTable(identifier);
-            return table;
+            return getDataTable(identifier);
         }
     }
 
