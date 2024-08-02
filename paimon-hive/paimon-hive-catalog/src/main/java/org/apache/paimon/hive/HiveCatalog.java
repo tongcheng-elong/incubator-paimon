@@ -91,6 +91,7 @@ import static org.apache.paimon.hive.HiveCatalogOptions.LOCATION_IN_PROPERTIES;
 import static org.apache.paimon.options.CatalogOptions.ALLOW_UPPER_CASE;
 import static org.apache.paimon.options.CatalogOptions.TABLE_TYPE;
 import static org.apache.paimon.options.OptionsUtils.convertToPropertiesPrefixKey;
+import static org.apache.paimon.utils.BranchManager.DEFAULT_MAIN_BRANCH;
 import static org.apache.paimon.utils.Preconditions.checkArgument;
 import static org.apache.paimon.utils.StringUtils.isNullOrWhitespaceOnly;
 
@@ -185,7 +186,7 @@ public class HiveCatalog extends AbstractCatalog {
     public Path getDataTableLocation(Identifier identifier) {
         try {
             String databaseName = identifier.getDatabaseName();
-            String tableName = identifier.getObjectName();
+            String tableName = identifier.getTableName();
             Optional<Path> tablePath =
                     clients.run(
                             client -> {
@@ -363,7 +364,7 @@ public class HiveCatalog extends AbstractCatalog {
                             client ->
                                     client.getTable(
                                             identifier.getDatabaseName(),
-                                            identifier.getObjectName()));
+                                            identifier.getTableName()));
         } catch (NoSuchObjectException e) {
             return false;
         } catch (TException e) {
@@ -376,7 +377,11 @@ public class HiveCatalog extends AbstractCatalog {
                     "Interrupted in call to tableExists " + identifier.getFullName(), e);
         }
 
-        return isPaimonTable(table);
+        return isPaimonTable(table)
+                && tableSchemaInFileSystem(
+                                getDataTableLocation(identifier),
+                                identifier.getBranchNameOrDefault())
+                        .isPresent();
     }
 
     private static boolean isPaimonTable(Table table) {
@@ -387,19 +392,13 @@ public class HiveCatalog extends AbstractCatalog {
     }
 
     @Override
-    public TableSchema getDataTableSchema(Identifier identifier, String branchName)
-            throws TableNotExistException {
-        assertMainBranch(branchName);
-        return getDataTableSchema(identifier);
-    }
-
-    private TableSchema getDataTableSchema(Identifier identifier) throws TableNotExistException {
+    public TableSchema getDataTableSchema(Identifier identifier) throws TableNotExistException {
         if (!tableExists(identifier)) {
             throw new TableNotExistException(identifier);
         }
 
-        Path tableLocation = getDataTableLocation(identifier);
-        return tableSchemaInFileSystem(tableLocation)
+        return tableSchemaInFileSystem(
+                        getDataTableLocation(identifier), identifier.getBranchNameOrDefault())
                 .orElseThrow(() -> new TableNotExistException(identifier));
     }
 
@@ -418,7 +417,7 @@ public class HiveCatalog extends AbstractCatalog {
                     client ->
                             client.dropTable(
                                     identifier.getDatabaseName(),
-                                    identifier.getObjectName(),
+                                    identifier.getTableName(),
                                     true,
                                     false,
                                     true));
@@ -490,10 +489,10 @@ public class HiveCatalog extends AbstractCatalog {
     protected void renameTableImpl(Identifier fromTable, Identifier toTable) {
         try {
             String fromDB = fromTable.getDatabaseName();
-            String fromTableName = fromTable.getObjectName();
+            String fromTableName = fromTable.getTableName();
             Table table = clients.run(client -> client.getTable(fromDB, fromTableName));
             table.setDbName(toTable.getDatabaseName());
-            table.setTableName(toTable.getObjectName());
+            table.setTableName(toTable.getTableName());
             clients.execute(client -> client.alter_table(fromDB, fromTableName, table));
 
             Path fromPath = getDataTableLocation(fromTable);
@@ -516,7 +515,7 @@ public class HiveCatalog extends AbstractCatalog {
                 clients.execute(
                         client ->
                                 client.alter_table(
-                                        toTable.getDatabaseName(), toTable.getObjectName(), table));
+                                        toTable.getDatabaseName(), toTable.getTableName(), table));
             }
         } catch (TException e) {
             throw new RuntimeException("Failed to rename table " + fromTable.getFullName(), e);
@@ -527,22 +526,23 @@ public class HiveCatalog extends AbstractCatalog {
     }
 
     @Override
-    protected void alterTableImpl(
-            Identifier identifier, String branchName, List<SchemaChange> changes)
+    protected void alterTableImpl(Identifier identifier, List<SchemaChange> changes)
             throws TableNotExistException, ColumnAlreadyExistException, ColumnNotExistException {
-        assertMainBranch(branchName);
-
         final SchemaManager schemaManager = schemaManager(identifier);
         // first commit changes to underlying files
         TableSchema schema = schemaManager.commitChanges(changes);
 
+        // currently only changes to main branch affects metastore
+        if (!DEFAULT_MAIN_BRANCH.equals(identifier.getBranchNameOrDefault())) {
+            return;
+        }
         try {
             Table table =
                     clients.run(
                             client ->
                                     client.getTable(
                                             identifier.getDatabaseName(),
-                                            identifier.getObjectName()));
+                                            identifier.getTableName()));
             alterTableToHms(table, identifier, schema);
         } catch (Exception te) {
             schemaManager.deleteSchema(schema.id());
@@ -558,7 +558,7 @@ public class HiveCatalog extends AbstractCatalog {
                 client ->
                         client.alter_table(
                                 identifier.getDatabaseName(),
-                                identifier.getObjectName(),
+                                identifier.getTableName(),
                                 table,
                                 true));
     }
@@ -615,7 +615,9 @@ public class HiveCatalog extends AbstractCatalog {
         validateIdentifierNameCaseInsensitive(identifier);
 
         TableSchema tableSchema =
-                tableSchemaInFileSystem(getDataTableLocation(identifier))
+                tableSchemaInFileSystem(
+                                getDataTableLocation(identifier),
+                                identifier.getBranchNameOrDefault())
                         .orElseThrow(() -> new TableNotExistException(identifier));
         Table newTable = createHiveTable(identifier, tableSchema);
         try {
@@ -625,7 +627,7 @@ public class HiveCatalog extends AbstractCatalog {
                                 client ->
                                         client.getTable(
                                                 identifier.getDatabaseName(),
-                                                identifier.getObjectName()));
+                                                identifier.getTableName()));
                 checkArgument(
                         isPaimonTable(table),
                         "Table %s is not a paimon table in hive metastore.",
@@ -673,7 +675,7 @@ public class HiveCatalog extends AbstractCatalog {
                         TableType.class);
         Table table =
                 new Table(
-                        identifier.getObjectName(),
+                        identifier.getTableName(),
                         identifier.getDatabaseName(),
                         // current linux user
                         System.getProperty("user.name"),
@@ -776,7 +778,10 @@ public class HiveCatalog extends AbstractCatalog {
     }
 
     private SchemaManager schemaManager(Identifier identifier) {
-        return new SchemaManager(fileIO, getDataTableLocation(identifier))
+        return new SchemaManager(
+                        fileIO,
+                        getDataTableLocation(identifier),
+                        identifier.getBranchNameOrDefault())
                 .withLock(lock(identifier));
     }
 
