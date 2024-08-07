@@ -27,6 +27,12 @@ under the License.
     </thead>
     <tbody>
         <tr>
+            <td><h5>async-file-write</h5></td>
+            <td style="word-wrap: break-word;">true</td>
+            <td>Boolean</td>
+            <td>Whether to enable asynchronous IO writing when writing files.</td>
+        </tr>
+        <tr>
             <td><h5>auto-create</h5></td>
             <td style="word-wrap: break-word;">false</td>
             <td>Boolean</td>
@@ -854,7 +860,7 @@ If the data size allocated for the sorting task is uneven,which may lead to perf
         </tr>
         <tr>
             <td><h5>write-max-writers-to-spill</h5></td>
-            <td style="word-wrap: break-word;">5</td>
+            <td style="word-wrap: break-word;">10</td>
             <td>Integer</td>
             <td>When in batch append inserting, if the writer number is greater than this option, we open the buffer cache and spill function to avoid out-of-memory. </td>
         </tr>
