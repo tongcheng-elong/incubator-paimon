@@ -522,12 +522,18 @@ public class CoreOptions implements Serializable {
     public static final ConfigOption<Integer> COMPACTION_MAX_FILE_NUM =
             key("compaction.max.file-num")
                     .intType()
-                    .defaultValue(50)
+                    .noDefaultValue()
                     .withFallbackKeys("compaction.early-max.file-num")
                     .withDescription(
-                            "For file set [f_0,...,f_N], the maximum file number to trigger a compaction "
-                                    + "for append-only table, even if sum(size(f_i)) < targetFileSize. This value "
-                                    + "avoids pending too much small files, which slows down the performance.");
+                            Description.builder()
+                                    .text(
+                                            "For file set [f_0,...,f_N], the maximum file number to trigger a compaction "
+                                                    + "for append-only table, even if sum(size(f_i)) < targetFileSize. This value "
+                                                    + "avoids pending too much small files.")
+                                    .list(
+                                            text("Default value of Append Table is '50'."),
+                                            text("Default value of Bucketed Append Table is '5'."))
+                                    .build());
 
     public static final ConfigOption<ChangelogProducer> CHANGELOG_PRODUCER =
             key("changelog-producer")
@@ -1252,6 +1258,13 @@ public class CoreOptions implements Serializable {
                     .noDefaultValue()
                     .withDescription("Specifies the commit user prefix.");
 
+    @Immutable
+    public static final ConfigOption<Boolean> FORCE_LOOKUP =
+            key("force-lookup")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("Whether to force the use of lookup for compaction.");
+
     public static final ConfigOption<Boolean> LOOKUP_WAIT =
             key("lookup-wait")
                     .booleanType()
@@ -1679,8 +1692,8 @@ public class CoreOptions implements Serializable {
         return options.get(COMPACTION_MIN_FILE_NUM);
     }
 
-    public int compactionMaxFileNum() {
-        return options.get(COMPACTION_MAX_FILE_NUM);
+    public Optional<Integer> compactionMaxFileNum() {
+        return options.getOptional(COMPACTION_MAX_FILE_NUM);
     }
 
     public long dynamicBucketTargetRowNum() {
@@ -1699,7 +1712,8 @@ public class CoreOptions implements Serializable {
         return LookupStrategy.from(
                 mergeEngine().equals(MergeEngine.FIRST_ROW),
                 changelogProducer().equals(ChangelogProducer.LOOKUP),
-                deletionVectorsEnabled());
+                deletionVectorsEnabled(),
+                options.get(FORCE_LOOKUP));
     }
 
     public boolean changelogRowDeduplicate() {
