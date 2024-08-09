@@ -16,16 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.paimon.spark.sql
+package org.apache.paimon.spark
 
-import org.apache.paimon.spark.{PaimonPrimaryKeyBucketedTableTest, PaimonPrimaryKeyNonBucketTableTest}
+import org.apache.paimon.table.source.Split
 
-class MergeIntoPrimaryKeyBucketedTableTest
-  extends MergeIntoTableTestBase
-  with MergeIntoNotMatchedBySourceTest
-  with PaimonPrimaryKeyBucketedTableTest {}
-
-class MergeIntoPrimaryKeyNonBucketTableTest
-  extends MergeIntoTableTestBase
-  with MergeIntoNotMatchedBySourceTest
-  with PaimonPrimaryKeyNonBucketTableTest {}
+// never be used
+case class PaimonBucketedInputPartition(splits: Seq[Split], bucket: Int)
+  extends PaimonInputPartition
