@@ -864,7 +864,7 @@ public class FileStoreCommitImpl implements FileStoreCommit {
             }
             // merge manifest files with changes
             newMetas.addAll(
-                    ManifestFileMeta.merge(
+                    ManifestFileMerger.merge(
                             oldMetas,
                             manifestFile,
                             manifestTargetSize.getBytes(),
@@ -1007,7 +1007,7 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                                 identifier,
                                 commitKind.name()));
             }
-            commitCallbacks.forEach(callback -> callback.call(tableFiles, identifier, watermark));
+            commitCallbacks.forEach(callback -> callback.call(tableFiles, newSnapshot));
             return true;
         }
 
