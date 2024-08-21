@@ -227,6 +227,7 @@ public class MergeTreeWriter implements RecordWriter<KeyValue>, MemoryOwner {
                         changelogWriter == null ? null : changelogWriter::write,
                         dataWriter::write);
             } finally {
+                writeBuffer.clear();
                 if (changelogWriter != null) {
                     changelogWriter.close();
                 }
@@ -251,8 +252,6 @@ public class MergeTreeWriter implements RecordWriter<KeyValue>, MemoryOwner {
                 newFiles.add(dataMeta);
                 compactManager.addNewFile(dataMeta);
             }
-
-            writeBuffer.clear();
         }
 
         trySyncLatestCompaction(waitForLatestCompaction);
@@ -317,7 +316,7 @@ public class MergeTreeWriter implements RecordWriter<KeyValue>, MemoryOwner {
         compactChangelog.clear();
         this.compactDeletionFile = null;
 
-        return new CommitIncrement(dataIncrement, compactIncrement, drainDeletionFile);
+        return new CommitIncrement(dataIncrement, compactIncrement, null, drainDeletionFile);
     }
 
     private void trySyncLatestCompaction(boolean blocking) throws Exception {
