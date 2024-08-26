@@ -75,6 +75,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -378,7 +379,8 @@ public abstract class HiveCatalogITCaseBase {
                 .await();
         tEnv.executeSql("USE CATALOG paimon_catalog_sync").await();
         tEnv.executeSql("USE test_db").await();
-        tEnv.executeSql("CREATE TABLE t01 ( aa INT, bb STRING ) WITH ( 'file.format' = 'avro' )")
+        tEnv.executeSql(
+                        "CREATE TABLE t01 ( aa INT, bb STRING, cc STRING, PRIMARY KEY (cc, aa) NOT ENFORCED) PARTITIONED BY (cc) WITH ('file.format' = 'avro', 'bucket' = '3')")
                 .await();
         // assert contain properties
         assertThat(
@@ -387,18 +389,28 @@ public abstract class HiveCatalogITCaseBase {
                                 .contains("\tfile.format         \tavro                "))
                 .isTrue();
 
-        tEnv.executeSql("ALTER TABLE t01 SET ( 'file.format' = 'parquet' )").await();
         assertThat(
                         hiveShell
                                 .executeQuery("DESC FORMATTED t01")
-                                .contains("\tfile.format         \tparquet             "))
+                                .contains("\tprimary-key         \tcc,aa               "))
                 .isTrue();
 
-        tEnv.executeSql("ALTER TABLE t01 SET ('owner' = 'hive')").await();
         assertThat(
                         hiveShell
                                 .executeQuery("DESC FORMATTED t01")
-                                .contains("\towner               \thive                "))
+                                .contains("\tpartition           \tcc                  "))
+                .isTrue();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t01")
+                                .contains("\tbucket-key          \taa                  "))
+                .isTrue();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t01")
+                                .contains("\tbucket              \t3                   "))
                 .isTrue();
 
         tEnv.executeSql(
@@ -416,29 +428,143 @@ public abstract class HiveCatalogITCaseBase {
                 .await();
         tEnv.executeSql("USE CATALOG paimon_catalog_sync01").await();
         tEnv.executeSql("USE test_db").await();
-        tEnv.executeSql("CREATE TABLE t02 ( aa INT, bb STRING ) WITH ( 'file.format' = 'avro' )")
+        tEnv.executeSql(
+                        "CREATE TABLE t02 ( aa INT, bb STRING, cc STRING, PRIMARY KEY (cc, aa) NOT ENFORCED) PARTITIONED BY (cc) WITH ('file.format' = 'avro', 'bucket' = '3')")
                 .await();
 
         // assert not contain properties
+        List<String> descFormattedT02 = hiveShell.executeQuery("DESC FORMATTED t02");
         assertThat(
                         hiveShell
                                 .executeQuery("DESC FORMATTED t02")
                                 .contains("\tfile.format         \tavro                "))
                 .isFalse();
 
-        tEnv.executeSql("ALTER TABLE t02 SET ( 'file.format' = 'parquet' )").await();
         assertThat(
                         hiveShell
                                 .executeQuery("DESC FORMATTED t02")
+                                .contains("\tprimary-key         \tcc,aa               "))
+                .isFalse();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t02")
+                                .contains("\tpartition           \tcc                  "))
+                .isFalse();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t02")
+                                .contains("\tbucket-key          \taa                  "))
+                .isFalse();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t02")
+                                .contains("\tbucket              \t3                   "))
+                .isFalse();
+    }
+
+    @Test
+    public void testAlterTableWithSyncTblProperties()
+            throws ExecutionException, InterruptedException {
+        tEnv.executeSql(
+                        String.join(
+                                "\n",
+                                "CREATE CATALOG paimon_catalog_03 WITH (",
+                                "  'type' = 'paimon',",
+                                "  'metastore' = 'hive',",
+                                "  'uri' = '',",
+                                "  'warehouse' = '" + path + "',",
+                                "  'lock.enabled' = 'true',",
+                                "  'table.type' = 'EXTERNAL'",
+                                ")"))
+                .await();
+        tEnv.executeSql("USE CATALOG paimon_catalog_03").await();
+        tEnv.executeSql("USE test_db").await();
+        tEnv.executeSql(
+                        "CREATE TABLE t03 ( aa INT, bb STRING, cc STRING, PRIMARY KEY (cc, aa) NOT ENFORCED) PARTITIONED BY (cc) WITH ('file.format' = 'avro', 'bucket' = '3')")
+                .await();
+
+        tEnv.executeSql("ALTER TABLE t03 SET ( 'file.format' = 'parquet' )").await();
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t03")
                                 .contains("\tfile.format         \tparquet             "))
                 .isFalse();
 
-        tEnv.executeSql("ALTER TABLE t02 SET ('owner' = 'hive')").await();
         assertThat(
                         hiveShell
-                                .executeQuery("DESC FORMATTED t02")
-                                .contains("\towner               \thive                "))
+                                .executeQuery("DESC FORMATTED t03")
+                                .contains("\tprimary-key         \tcc,aa               "))
                 .isFalse();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t03")
+                                .contains("\tpartition           \tcc                  "))
+                .isFalse();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t03")
+                                .contains("\tbucket              \t3                   "))
+                .isFalse();
+
+        tEnv.executeSql(
+                        String.join(
+                                "\n",
+                                "CREATE CATALOG paimon_catalog_03_syn WITH (",
+                                "  'type' = 'paimon',",
+                                "  'metastore' = 'hive',",
+                                "  'uri' = '',",
+                                "  'warehouse' = '" + path + "',",
+                                "  'lock.enabled' = 'true',",
+                                "  'table.type' = 'EXTERNAL',",
+                                "  'sync-all-properties' = 'true'",
+                                ")"))
+                .await();
+
+        tEnv.executeSql("USE CATALOG paimon_catalog_03_syn").await();
+        tEnv.executeSql("USE test_db").await();
+
+        tEnv.executeSql("ALTER TABLE t03 SET ( 'file.format' = 'parquet' )").await();
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t03")
+                                .contains("\tfile.format         \tparquet             "))
+                .isTrue();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t03")
+                                .contains("\tprimary-key         \tcc,aa               "))
+                .isTrue();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t03")
+                                .contains("\tpartition           \tcc                  "))
+                .isTrue();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t03")
+                                .contains("\tbucket-key          \taa                  "))
+                .isTrue();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t03")
+                                .contains("\tbucket              \t3                   "))
+                .isTrue();
+
+        tEnv.executeSql("ALTER TABLE t03 SET ('owner' = 'test')").await();
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED t03")
+                                .contains("\towner               \ttest                "))
+                .isTrue();
     }
 
     @Test
@@ -1561,6 +1687,96 @@ public abstract class HiveCatalogITCaseBase {
                 .isTrue();
         assertThat(hiveShell.executeQuery("SHOW PARTITIONS t_repair_hive"))
                 .containsExactlyInAnyOrder("dt=2020-01-02/hh=09", "dt=2020-01-03/hh=10");
+    }
+
+    @Test
+    public void testRepairTableWithSyncTblProperties()
+            throws ExecutionException, InterruptedException {
+        tEnv.executeSql(
+                        String.join(
+                                "\n",
+                                "CREATE CATALOG paimon_catalog_repair_03 WITH (",
+                                "  'type' = 'paimon',",
+                                "  'metastore' = 'hive',",
+                                "  'uri' = '',",
+                                "  'warehouse' = '" + path + "',",
+                                "  'lock.enabled' = 'true',",
+                                "  'table.type' = 'EXTERNAL'",
+                                ")"))
+                .await();
+        tEnv.executeSql("USE CATALOG paimon_catalog_repair_03").await();
+        tEnv.executeSql("USE test_db").await();
+        tEnv.executeSql(
+                        "CREATE TABLE repair_t03 ( aa INT, bb STRING, cc STRING, PRIMARY KEY (cc, aa) NOT ENFORCED) PARTITIONED BY (cc) WITH ('file.format' = 'avro', 'bucket' = '3')")
+                .await();
+
+        tEnv.executeSql("CALL sys.repair('test_db.repair_t03')");
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED repair_t03")
+                                .contains("\tfile.format         \tavro                "))
+                .isFalse();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED repair_t03")
+                                .contains("\tprimary-key         \tcc,aa               "))
+                .isFalse();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED repair_t03")
+                                .contains("\tpartition           \tcc                  "))
+                .isFalse();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED repair_t03")
+                                .contains("\tbucket              \t3                   "))
+                .isFalse();
+
+        tEnv.executeSql(
+                        String.join(
+                                "\n",
+                                "CREATE CATALOG paimon_catalog_repair_syn_03 WITH (",
+                                "  'type' = 'paimon',",
+                                "  'metastore' = 'hive',",
+                                "  'uri' = '',",
+                                "  'warehouse' = '" + path + "',",
+                                "  'lock.enabled' = 'true',",
+                                "  'table.type' = 'EXTERNAL',",
+                                "  'sync-all-properties' = 'true'",
+                                ")"))
+                .await();
+        tEnv.executeSql("USE CATALOG paimon_catalog_repair_syn_03").await();
+        hiveShell.execute("use test_db");
+
+        tEnv.executeSql("CALL sys.repair('test_db.repair_t03')");
+        hiveShell.executeQuery("DESC FORMATTED repair_t03").stream().forEach(System.out::println);
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED repair_t03")
+                                .contains("\tfile.format         \tavro                "))
+                .isTrue();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED repair_t03")
+                                .contains("\tprimary-key         \tcc,aa               "))
+                .isTrue();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED repair_t03")
+                                .contains("\tpartition           \tcc                  "))
+                .isTrue();
+
+        assertThat(
+                        hiveShell
+                                .executeQuery("DESC FORMATTED repair_t03")
+                                .contains("\tbucket              \t3                   "))
+                .isTrue();
     }
 
     @Test
