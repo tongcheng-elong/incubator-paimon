@@ -88,5 +88,6 @@ public class SparkConnectorOptions {
                     .withDescription(
                             "When false, the default is to follow the historical version method. "
                                     + "LocalZonedTimestamp and TimestampType are converted to "
-                                    + "Spark's TimestampType. Otherwise, the new version method is used.");
+                                    + "Spark's TimestampType. Otherwise, the new version method is used."
+                                    + "The default value is true");
 }
