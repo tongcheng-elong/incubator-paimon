@@ -18,6 +18,7 @@
 
 package org.apache.paimon.spark;
 
+import org.apache.paimon.annotation.Documentation;
 import org.apache.paimon.options.ConfigOption;
 
 import static org.apache.paimon.options.ConfigOptions.key;
@@ -77,4 +78,16 @@ public class SparkConnectorOptions {
                     .defaultValue(false)
                     .withDescription(
                             "Whether to read row in the form of changelog (add rowkind column in row to represent its change type).");
+
+    @Documentation.ExcludeFromDocumentation(
+            "In Spark >= 3.4, does Paimon's TimestampType type conversion use the old version method by default")
+    public static final ConfigOption<Boolean> PAIMON_INFER_TIMESTAMP_NTZ_ENABLED =
+            key("spark.sql.paimon.inferTimestampNTZ.enabled")
+                    .booleanType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "When false, the default is to follow the historical version method. "
+                                    + "LocalZonedTimestamp and TimestampType are converted to "
+                                    + "Spark's TimestampType. Otherwise, the new version method is used."
+                                    + "The default value is true");
 }
