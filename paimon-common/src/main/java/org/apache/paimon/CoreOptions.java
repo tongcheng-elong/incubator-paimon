@@ -1355,6 +1355,13 @@ public class CoreOptions implements Serializable {
                     .withDescription(
                             "Whether to enable asynchronous IO writing when writing files.");
 
+    public static final ConfigOption<Boolean> SUPPORT_DELETE_BY_TYPE =
+            key("support-delete-by-type")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "If set to true, when binlog_eventtype value is 'delete',the row will be deleted");
+
     private final Options options;
 
     public CoreOptions(Map<String, String> options) {
@@ -2140,6 +2147,10 @@ public class CoreOptions implements Serializable {
 
     public boolean metadataIcebergCompatible() {
         return options.get(METADATA_ICEBERG_COMPATIBLE);
+    }
+
+    public boolean supportDeleteByType() {
+        return options.get(SUPPORT_DELETE_BY_TYPE);
     }
 
     /** Specifies the merge engine for table with primary key. */
