@@ -45,6 +45,8 @@ import org.apache.orc.Reader;
 import org.apache.orc.StringColumnStatistics;
 import org.apache.orc.TimestampColumnStatistics;
 import org.apache.orc.TypeDescription;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Date;
@@ -56,6 +58,7 @@ public class OrcSimpleStatsExtractor implements SimpleStatsExtractor {
 
     private final RowType rowType;
     private final SimpleColStatsCollector.Factory[] statsCollectors;
+    private static final Logger LOG = LoggerFactory.getLogger(OrcSimpleStatsExtractor.class);
 
     public OrcSimpleStatsExtractor(
             RowType rowType, SimpleColStatsCollector.Factory[] statsCollectors) {
@@ -230,11 +233,18 @@ public class OrcSimpleStatsExtractor implements SimpleStatsExtractor {
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
                 assertStatsClass(field, stats, TimestampColumnStatistics.class);
                 TimestampColumnStatistics timestampStats = (TimestampColumnStatistics) stats;
-                fieldStats =
-                        new SimpleColStats(
-                                Timestamp.fromSQLTimestamp(timestampStats.getMinimum()),
-                                Timestamp.fromSQLTimestamp(timestampStats.getMaximum()),
-                                nullCount);
+                try {
+                    fieldStats =
+                            new SimpleColStats(
+                                    Timestamp.fromSQLTimestamp(timestampStats.getMinimum()),
+                                    Timestamp.fromSQLTimestamp(timestampStats.getMaximum()),
+                                    nullCount);
+                } catch (Throwable e) {
+                    LOG.warn(
+                            "Get timestampStats meet error, this will exclude by Scan stat filter",
+                            e);
+                    fieldStats = new SimpleColStats(null, null, nullCount);
+                }
                 break;
             default:
                 fieldStats = new SimpleColStats(null, null, nullCount);
