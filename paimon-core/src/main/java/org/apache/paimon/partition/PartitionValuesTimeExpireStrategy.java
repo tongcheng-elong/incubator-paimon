@@ -95,6 +95,12 @@ public class PartitionValuesTimeExpireStrategy extends PartitionExpireStrategy {
                         CoreOptions.PartitionExpireStrategy.UPDATE_TIME,
                         CoreOptions.PARTITION_EXPIRATION_STRATEGY.key());
                 return false;
+            } catch (Exception e) {
+                LOG.warn(
+                        "PartitionValuesTimePredicate error, partition : {}, exception: {}",
+                        array,
+                        e);
+                return false;
             }
         }
 
