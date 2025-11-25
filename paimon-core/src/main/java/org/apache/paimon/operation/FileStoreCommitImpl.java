@@ -1012,8 +1012,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
         }
 
         if (success) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(
+            if (LOG.isInfoEnabled()) {
+                LOG.info(
                         String.format(
                                 "Successfully commit snapshot #%d (path %s) by user %s "
                                         + "with identifier %s and kind %s.",
