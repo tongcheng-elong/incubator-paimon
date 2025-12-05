@@ -344,7 +344,7 @@ public class CoreOptions implements Serializable {
     public static final ConfigOption<String> MANIFEST_COMPRESSION =
             key("manifest.compression")
                     .stringType()
-                    .defaultValue("none")
+                    .defaultValue("null")
                     .withDescription("Default file compression for manifest.");
 
     public static final ConfigOption<MemorySize> MANIFEST_TARGET_FILE_SIZE =
