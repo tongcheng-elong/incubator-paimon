@@ -47,6 +47,7 @@ public class CommitMetrics {
     @VisibleForTesting static final String LAST_COMMIT_DURATION = "lastCommitDuration";
     @VisibleForTesting static final String COMMIT_DURATION = "commitDuration";
     @VisibleForTesting static final String LAST_COMMIT_ATTEMPTS = "lastCommitAttempts";
+    @VisibleForTesting static final String SNAPSHOT_GAP = "snapshotGap";
     @VisibleForTesting static final String LAST_TABLE_FILES_ADDED = "lastTableFilesAdded";
     @VisibleForTesting static final String LAST_TABLE_FILES_DELETED = "lastTableFilesDeleted";
     @VisibleForTesting static final String LAST_TABLE_FILES_APPENDED = "lastTableFilesAppended";
@@ -81,6 +82,8 @@ public class CommitMetrics {
                 LAST_COMMIT_DURATION, () -> latestCommit == null ? 0L : latestCommit.getDuration());
         metricGroup.gauge(
                 LAST_COMMIT_ATTEMPTS, () -> latestCommit == null ? 0L : latestCommit.getAttempts());
+        metricGroup.gauge(
+                SNAPSHOT_GAP, () -> latestCommit == null ? 0L : latestCommit.getSnapshotGap());
         metricGroup.gauge(
                 LAST_GENERATED_SNAPSHOTS,
                 () -> latestCommit == null ? 0L : latestCommit.getGeneratedSnapshots());

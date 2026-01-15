@@ -52,6 +52,8 @@ public class CommitStats {
     private final long numPartitionsWritten;
     private final long numBucketsWritten;
 
+    private final long snapshotGap;
+
     public CommitStats(
             List<ManifestEntry> appendTableFiles,
             List<ManifestEntry> appendChangelogFiles,
@@ -59,7 +61,8 @@ public class CommitStats {
             List<ManifestEntry> compactChangelogFiles,
             long commitDuration,
             int generatedSnapshots,
-            int attempts) {
+            int attempts,
+            long snapshotGap) {
         List<ManifestEntry> addedTableFiles = new ArrayList<>(appendTableFiles);
         addedTableFiles.addAll(
                 compactTableFiles.stream()
@@ -85,6 +88,7 @@ public class CommitStats {
         this.duration = commitDuration;
         this.generatedSnapshots = generatedSnapshots;
         this.attempts = attempts;
+        this.snapshotGap = snapshotGap;
     }
 
     @VisibleForTesting
@@ -203,4 +207,7 @@ public class CommitStats {
     protected int getAttempts() {
         return attempts;
     }
+
+    @VisibleForTesting
+    protected long getSnapshotGap() { return snapshotGap; }
 }

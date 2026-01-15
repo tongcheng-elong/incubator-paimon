@@ -351,6 +351,12 @@ public class FileStoreCommitImpl implements FileStoreCommit {
             }
         } finally {
             long commitDuration = (System.nanoTime() - started) / 1_000_000;
+            long snapshotGap = 0;
+            try {
+                snapshotGap = latestSnapshot.id() - snapshotManager.earliestSnapshot().id();
+            } catch (Exception e) {
+                LOG.warn("Failed to compute snapshot gap for " + committable.identifier(), e);
+            }
             if (this.commitMetrics != null) {
                 reportCommit(
                         appendTableFiles,
@@ -359,7 +365,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                         compactChangelog,
                         commitDuration,
                         generatedSnapshot,
-                        attempts);
+                        attempts,
+                        snapshotGap);
             }
         }
     }
@@ -371,7 +378,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
             List<ManifestEntry> compactChangelogFiles,
             long commitDuration,
             int generatedSnapshots,
-            int attempts) {
+            int attempts,
+            long snapshotGap) {
         CommitStats commitStats =
                 new CommitStats(
                         appendTableFiles,
@@ -380,7 +388,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                         compactChangelogFiles,
                         commitDuration,
                         generatedSnapshots,
-                        attempts);
+                        attempts,
+                        snapshotGap);
         commitMetrics.reportCommit(commitStats);
     }
 
@@ -497,6 +506,12 @@ public class FileStoreCommitImpl implements FileStoreCommit {
             }
         } finally {
             long commitDuration = (System.nanoTime() - started) / 1_000_000;
+            long snapshotGap = 0;
+            try {
+                snapshotGap = snapshotManager.latestSnapshot().id() - snapshotManager.earliestSnapshot().id();
+            } catch (Exception e) {
+                LOG.warn("Failed to compute snapshot gap for " + committable.identifier(), e);
+            }
             if (this.commitMetrics != null) {
                 reportCommit(
                         appendTableFiles,
@@ -505,7 +520,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                         Collections.emptyList(),
                         commitDuration,
                         generatedSnapshot,
-                        attempts);
+                        attempts,
+                        snapshotGap);
             }
         }
     }
