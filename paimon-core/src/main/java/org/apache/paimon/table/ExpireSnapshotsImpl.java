@@ -32,7 +32,6 @@ import org.apache.paimon.utils.TagManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
@@ -150,8 +149,7 @@ public class ExpireSnapshotsImpl implements ExpireSnapshots {
         }
 
         if (LOG.isInfoEnabled()) {
-            LOG.info(
-                    "Snapshot expire range is [" + beginInclusiveId + ", " + endExclusiveId + ")");
+            LOG.info("Snapshot expire range is [" + beginInclusiveId + ", " + endExclusiveId + ")");
         }
 
         List<Snapshot> taggedSnapshots = tagManager.taggedSnapshots();
