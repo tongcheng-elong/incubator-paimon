@@ -163,14 +163,7 @@ public class ExpireSnapshotsImpl implements ExpireSnapshots {
             if (LOG.isInfoEnabled()) {
                 LOG.info("Ready to delete merge tree files not used by snapshot #" + id);
             }
-            Snapshot snapshot = null;
-            try {
-                snapshot = snapshotManager.snapshot(id);
-            } catch (Exception e) {
-                beginInclusiveId = id + 1;
-                LOG.warn("Skip clean snapshot: ", e);
-                continue;
-            }
+            Snapshot snapshot = snapshotManager.snapshot(id);
             // expire merge tree files and collect changed buckets
             Predicate<ManifestEntry> skipper;
             try {
