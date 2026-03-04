@@ -207,7 +207,8 @@ public class CommitMetricsTest {
                         200,
                         2,
                         1,
-                        42L);
+                        42L,
+                        2);
 
         commitMetrics.reportCommit(commitStats);
     }
@@ -237,7 +238,8 @@ public class CommitMetricsTest {
                         500,
                         1,
                         2,
-                        99L);
+                        99L,
+                        2);
 
         commitMetrics.reportCommit(commitStats);
     }
