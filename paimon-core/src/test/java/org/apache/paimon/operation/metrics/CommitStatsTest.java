@@ -79,7 +79,8 @@ public class CommitStatsTest {
                         0,
                         0,
                         1,
-                        -1L);
+                        -1L,
+                        2);
         assertThat(commitStats.getTableFilesAdded()).isEqualTo(0);
         assertThat(commitStats.getTableFilesDeleted()).isEqualTo(0);
         assertThat(commitStats.getTableFilesAppended()).isEqualTo(0);
@@ -109,7 +110,8 @@ public class CommitStatsTest {
                         3000,
                         1,
                         2,
-                        5L);
+                        5L,
+                        3);
         assertThat(commitStats.getTableFilesAdded()).isEqualTo(2);
         assertThat(commitStats.getTableFilesDeleted()).isEqualTo(0);
         assertThat(commitStats.getTableFilesAppended()).isEqualTo(2);
@@ -139,7 +141,8 @@ public class CommitStatsTest {
                         3000,
                         2,
                         2,
-                        10L);
+                        10L,
+                        3);
         assertThat(commitStats.getTableFilesAdded()).isEqualTo(4);
         assertThat(commitStats.getTableFilesDeleted()).isEqualTo(1);
         assertThat(commitStats.getTableFilesAppended()).isEqualTo(2);
