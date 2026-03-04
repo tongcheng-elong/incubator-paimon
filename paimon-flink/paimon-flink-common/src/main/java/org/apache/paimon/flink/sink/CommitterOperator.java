@@ -29,6 +29,8 @@ import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -47,6 +49,8 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
 
     private static final long serialVersionUID = 1L;
     private static final long END_INPUT_CHECKPOINT_ID = Long.MAX_VALUE;
+    private static final Logger LOG =
+            LoggerFactory.getLogger(CommitterOperator.class);
 
     /** Record all the inputs until commit. */
     private final Deque<CommitT> inputs = new ArrayDeque<>();
@@ -131,6 +135,14 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
                         context, "commit_user_state", String.class, initialCommitUser);
         int parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
         int index = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
+
+        LOG.info(
+                "Initializing CommitterOperator: isRestored={}, commitUser={}, parallelism={}, index={}, streamingCheckpointEnabled={}",
+                context.isRestored(),
+                commitUser,
+                parallelism,
+                index,
+                streamingCheckpointEnabled);
 
         // parallelism of commit operator is always 1, so commitUser will never be null
         committer =
