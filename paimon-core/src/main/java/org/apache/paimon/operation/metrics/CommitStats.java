@@ -55,6 +55,8 @@ public class CommitStats {
     private final long numBucketsWritten;
     private final long lastCommittedSnapshotId;
 
+    private final long snapshotGap;
+
     public CommitStats(
             List<ManifestEntry> appendTableFiles,
             List<ManifestEntry> appendChangelogFiles,
@@ -63,7 +65,8 @@ public class CommitStats {
             long commitDuration,
             int generatedSnapshots,
             int attempts,
-            long lastCommittedSnapshotId) {
+            long lastCommittedSnapshotId,
+            long snapshotGap) {
         List<ManifestEntry> addedTableFiles =
                 appendTableFiles.stream()
                         .filter(f -> FileKind.ADD.equals(f.kind()))
@@ -113,6 +116,7 @@ public class CommitStats {
         this.generatedSnapshots = generatedSnapshots;
         this.attempts = attempts;
         this.lastCommittedSnapshotId = lastCommittedSnapshotId;
+        this.snapshotGap = snapshotGap;
     }
 
     @VisibleForTesting
@@ -243,5 +247,10 @@ public class CommitStats {
     @VisibleForTesting
     protected long getLastCommittedSnapshotId() {
         return lastCommittedSnapshotId;
+    }
+
+    @VisibleForTesting
+    protected long getSnapshotGap() {
+        return snapshotGap;
     }
 }
