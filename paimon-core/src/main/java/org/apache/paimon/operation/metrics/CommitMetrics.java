@@ -76,6 +76,8 @@ public class CommitMetrics {
     public static final String LAST_COMPACTION_OUTPUT_FILE_SIZE = "lastCompactionOutputFileSize";
     public static final String LAST_COMMITTED_SNAPSHOT_ID = "lastCommittedSnapshotId";
 
+    public static final String SNAPSHOT_GAP = "snapshotGap";
+
     private void registerGenericCommitMetrics() {
         metricGroup.gauge(
                 LAST_COMMIT_DURATION, () -> latestCommit == null ? 0L : latestCommit.getDuration());
@@ -130,6 +132,8 @@ public class CommitMetrics {
         metricGroup.gauge(
                 LAST_COMMITTED_SNAPSHOT_ID,
                 () -> latestCommit == null ? -1L : latestCommit.getLastCommittedSnapshotId());
+        metricGroup.gauge(
+                SNAPSHOT_GAP, () -> latestCommit == null ? 0L : latestCommit.getSnapshotGap());
     }
 
     public void reportCommit(CommitStats commitStats) {
