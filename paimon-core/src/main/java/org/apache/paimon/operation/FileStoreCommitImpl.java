@@ -363,6 +363,16 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                     "Finished (Uncertain of success) commit to table {}, duration {} ms",
                     tableName,
                     commitDuration);
+
+            long snapshotGap = 0;
+            try {
+                snapshotGap =
+                        snapshotManager.latestSnapshot().id()
+                                - snapshotManager.earliestSnapshot().id();
+            } catch (Exception e) {
+                LOG.warn("Failed to compute snapshot gap for " + committable.identifier(), e);
+            }
+
             if (this.commitMetrics != null) {
                 reportCommit(
                         changes.appendTableFiles,
@@ -371,7 +381,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                         changes.compactChangelog,
                         commitDuration,
                         generatedSnapshot,
-                        attempts);
+                        attempts,
+                        snapshotGap);
             }
         }
         return generatedSnapshot;
@@ -384,7 +395,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
             List<ManifestEntry> compactChangelogFiles,
             long commitDuration,
             int generatedSnapshots,
-            int attempts) {
+            int attempts,
+            long snapshotGap) {
         CommitStats commitStats =
                 new CommitStats(
                         appendTableFiles,
@@ -393,7 +405,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                         compactChangelogFiles,
                         commitDuration,
                         generatedSnapshots,
-                        attempts);
+                        attempts,
+                        snapshotGap);
         commitMetrics.reportCommit(commitStats);
     }
 
@@ -527,6 +540,16 @@ public class FileStoreCommitImpl implements FileStoreCommit {
         } finally {
             long commitDuration = (System.nanoTime() - started) / 1_000_000;
             LOG.info("Finished overwrite to table {}, duration {} ms", tableName, commitDuration);
+
+            long snapshotGap = 0;
+            try {
+                snapshotGap =
+                        snapshotManager.latestSnapshot().id()
+                                - snapshotManager.earliestSnapshot().id();
+            } catch (Exception e) {
+                LOG.warn("Failed to compute snapshot gap for " + committable.identifier(), e);
+            }
+
             if (this.commitMetrics != null) {
                 reportCommit(
                         changes.appendTableFiles,
@@ -535,7 +558,8 @@ public class FileStoreCommitImpl implements FileStoreCommit {
                         emptyList(),
                         commitDuration,
                         generatedSnapshot,
-                        attempts);
+                        attempts,
+                        snapshotGap);
             }
         }
         return generatedSnapshot;

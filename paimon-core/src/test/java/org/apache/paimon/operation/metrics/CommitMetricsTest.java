@@ -199,7 +199,8 @@ public class CommitMetricsTest {
                         compactChangelogFiles,
                         200,
                         2,
-                        1);
+                        1,
+                        2);
 
         commitMetrics.reportCommit(commitStats);
     }
@@ -228,6 +229,7 @@ public class CommitMetricsTest {
                         compactChangelogFiles,
                         500,
                         1,
+                        2,
                         2);
 
         commitMetrics.reportCommit(commitStats);
