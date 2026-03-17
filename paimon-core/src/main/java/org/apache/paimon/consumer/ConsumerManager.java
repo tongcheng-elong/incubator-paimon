@@ -22,6 +22,8 @@ import org.apache.paimon.fs.FileIO;
 import org.apache.paimon.fs.Path;
 import org.apache.paimon.utils.DateTimeUtils;
 import org.apache.paimon.utils.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -41,6 +43,8 @@ import static org.apache.paimon.utils.FileUtils.listVersionedFileStatus;
 
 /** Manage consumer groups. */
 public class ConsumerManager implements Serializable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ConsumerManager.class);
 
     private static final long serialVersionUID = 1L;
 
@@ -100,6 +104,11 @@ public class ConsumerManager implements Serializable {
                                         DateTimeUtils.toLocalDateTime(status.getModificationTime());
                                 if (expireDateTime.isAfter(modificationTime)) {
                                     fileIO.deleteQuietly(status.getPath());
+                                    LOG.info(
+                                            "Expiring consumer file. Expire time: {}, File modification time: {}, Path: {}",
+                                            expireDateTime,
+                                            modificationTime,
+                                            status.getPath());
                                 }
                             });
         } catch (IOException e) {

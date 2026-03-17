@@ -159,6 +159,12 @@ public class FileStoreLookupFunction implements Serializable, Closeable {
         int[] projection = projectFields.stream().mapToInt(fieldNames::indexOf).toArray();
         FileStoreTable storeTable = (FileStoreTable) table;
 
+        LOG.info(
+                "Using PrimaryKeyPartialLookupTable for lookup, table: {}, join keys: {}, cache mode: {}",
+                table.name(),
+                joinKeys,
+                options.get(LOOKUP_CACHE_MODE));
+
         if (options.get(LOOKUP_CACHE_MODE) == LookupCacheMode.AUTO
                 && new HashSet<>(table.primaryKeys()).equals(new HashSet<>(joinKeys))) {
             if (isRemoteServiceAvailable(storeTable)) {
@@ -175,6 +181,7 @@ public class FileStoreLookupFunction implements Serializable, Closeable {
                                     joinKeys,
                                     getRequireCachedBucketIds());
                 } catch (UnsupportedOperationException ignore2) {
+                    LOG.warn("PrimaryKeyPartialLookupTable local table is not supported", ignore2);
                 }
             }
         }
