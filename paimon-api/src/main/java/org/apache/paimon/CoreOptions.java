@@ -117,6 +117,13 @@ public class CoreOptions implements Serializable {
                     .defaultValue(TableType.TABLE)
                     .withDescription("Type of the table.");
 
+    public static final ConfigOption<Boolean> SUPPORT_DELETE_BY_TYPE =
+            key("support-delete-by-type")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "If set to true, when binlog_eventtype value is 'delete',the row will be deleted");
+
     public static final ConfigOption<Integer> BUCKET =
             key("bucket")
                     .intType()
