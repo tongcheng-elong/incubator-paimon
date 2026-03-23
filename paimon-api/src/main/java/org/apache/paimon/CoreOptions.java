@@ -94,6 +94,13 @@ public class CoreOptions implements Serializable {
 
     public static final String BLOB_DESCRIPTOR_PREFIX = "blob-descriptor.";
 
+    public static final ConfigOption<Boolean> SUPPORT_DELETE_BY_TYPE =
+            key("support-delete-by-type")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "If set to true, when binlog_eventtype value is 'delete',the row will be deleted");
+
     public static final ConfigOption<TableType> TYPE =
             key("type")
                     .enumType(TableType.class)
@@ -2444,6 +2451,10 @@ public class CoreOptions implements Serializable {
 
     public Map<String, String> toMap() {
         return options.toMap();
+    }
+
+    public boolean supportDeleteByType() {
+        return options.get(SUPPORT_DELETE_BY_TYPE);
     }
 
     public int bucket() {

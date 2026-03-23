@@ -22,6 +22,7 @@ import org.apache.paimon.CoreOptions;
 import org.apache.paimon.KeyValue;
 import org.apache.paimon.KeyValueFileStore;
 import org.apache.paimon.annotation.VisibleForTesting;
+import org.apache.paimon.data.InternalRow;
 import org.apache.paimon.fs.FileIO;
 import org.apache.paimon.fs.Path;
 import org.apache.paimon.mergetree.compact.LookupMergeFunction;
@@ -37,6 +38,7 @@ import org.apache.paimon.table.source.InnerTableRead;
 import org.apache.paimon.table.source.KeyValueTableRead;
 import org.apache.paimon.table.source.MergeTreeSplitGenerator;
 import org.apache.paimon.table.source.SplitGenerator;
+import org.apache.paimon.types.RowKind;
 import org.apache.paimon.types.RowType;
 import org.apache.paimon.utils.RowKindFilter;
 
@@ -162,12 +164,13 @@ public class PrimaryKeyFileStoreTable extends AbstractFileStoreTable {
                 rowType(),
                 store().newWrite(commitUser, writeId),
                 createRowKeyExtractor(),
-                (record, rowKind) ->
-                        kv.replace(
-                                record.primaryKey(),
-                                KeyValue.UNKNOWN_SEQUENCE,
-                                rowKind,
-                                record.row()),
+                (record, rowKind) -> {
+                    if (store().options().supportDeleteByType()) {
+                        rowKind = getRowKindByBinlogType(record.row(), rowKind);
+                    }
+                    return kv.replace(
+                            record.primaryKey(), KeyValue.UNKNOWN_SEQUENCE, rowKind, record.row());
+                },
                 rowKindGenerator(),
                 RowKindFilter.of(coreOptions()));
     }
@@ -185,5 +188,17 @@ public class PrimaryKeyFileStoreTable extends AbstractFileStoreTable {
         } else {
             return super.newExpireRunnable();
         }
+    }
+
+    public RowKind getRowKindByBinlogType(InternalRow row, RowKind rowKind) {
+        int index = schema().logicalRowType().getFieldNames().indexOf("binlog_eventtype");
+        if (index < 0) {
+            return rowKind;
+        }
+        String binlog_eventtype = row.getString(index).toString();
+        if (binlog_eventtype.equalsIgnoreCase("delete")) {
+            return RowKind.DELETE;
+        }
+        return rowKind;
     }
 }
