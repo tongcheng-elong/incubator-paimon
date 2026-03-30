@@ -38,6 +38,16 @@ public class SparkConnectorOptions {
                                     + "Set as a table/read option or with spark.paimon.scan.preserve-data-grouping. "
                                     + "The choice is fixed when the scan is created.");
 
+    public static final ConfigOption<Boolean> PAIMON_INFER_TIMESTAMP_NTZ_ENABLED =
+            key("spark.sql.paimon.inferTimestampNTZ.enabled")
+                    .booleanType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "When false, the default is to follow the historical version method. "
+                                    + "LocalZonedTimestamp and TimestampType are converted to "
+                                    + "Spark's TimestampType. Otherwise, the new version method is used."
+                                    + "The default value is true");
+
     public static final ConfigOption<Boolean> REQUIRED_SPARK_CONFS_CHECK_ENABLED =
             key("requiredSparkConfsCheck.enabled")
                     .booleanType()
