@@ -18,7 +18,16 @@
 
 package org.apache.paimon.spark.util.shim
 
+import org.apache.paimon.spark.SparkConnectorOptions
+
+import org.apache.spark.SparkEnv
+
 object TypeUtils {
 
-  def treatPaimonTimestampTypeAsSparkTimestampType(): Boolean = false
+  def treatPaimonTimestampTypeAsSparkTimestampType(): Boolean = {
+    !SparkEnv.get.conf
+      .getOption(SparkConnectorOptions.PAIMON_INFER_TIMESTAMP_NTZ_ENABLED.key())
+      .getOrElse("true")
+      .toBoolean
+  }
 }

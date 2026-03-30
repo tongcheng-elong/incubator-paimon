@@ -49,8 +49,7 @@ public class CommitterOperator<CommitT, GlobalCommitT> extends AbstractStreamOpe
 
     private static final long serialVersionUID = 1L;
     private static final long END_INPUT_CHECKPOINT_ID = Long.MAX_VALUE;
-    private static final Logger LOG =
-            LoggerFactory.getLogger(CommitterOperator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CommitterOperator.class);
 
     /** Record all the inputs until commit. */
     private final Deque<CommitT> inputs = new ArrayDeque<>();
