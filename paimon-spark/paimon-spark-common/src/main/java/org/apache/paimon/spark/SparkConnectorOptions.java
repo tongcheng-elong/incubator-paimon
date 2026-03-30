@@ -25,6 +25,16 @@ import static org.apache.paimon.options.ConfigOptions.key;
 /** Options for spark connector. */
 public class SparkConnectorOptions {
 
+    public static final ConfigOption<Boolean> PAIMON_INFER_TIMESTAMP_NTZ_ENABLED =
+            key("spark.sql.paimon.inferTimestampNTZ.enabled")
+                    .booleanType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "When false, the default is to follow the historical version method. "
+                                    + "LocalZonedTimestamp and TimestampType are converted to "
+                                    + "Spark's TimestampType. Otherwise, the new version method is used."
+                                    + "The default value is true");
+
     public static final ConfigOption<Boolean> REQUIRED_SPARK_CONFS_CHECK_ENABLED =
             key("requiredSparkConfsCheck.enabled")
                     .booleanType()
