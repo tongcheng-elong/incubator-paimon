@@ -28,7 +28,6 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -39,24 +38,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 
 /** Tests for {@link SnapshotManager}. */
 public class SnapshotManagerTest {
 
     @TempDir java.nio.file.Path tempDir;
-
-    @Test
-    public void testRetry() throws IOException {
-        SnapshotManager snapshotManager =
-                newSnapshotManager(LocalFileIO.create(), new Path(tempDir.toString()));
-        File file = new File(tempDir.toFile(), "/snapshot/snapshot-1");
-        file.getParentFile().mkdir();
-        file.createNewFile();
-        assertThatThrownBy(() -> snapshotManager.snapshot(1))
-                .hasMessageContaining("Retry fail after 10 times");
-    }
 
     @Test
     public void testSnapshotPath() {
