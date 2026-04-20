@@ -209,5 +209,7 @@ public class CommitStats {
     }
 
     @VisibleForTesting
-    protected long getSnapshotGap() { return snapshotGap; }
+    protected long getSnapshotGap() {
+        return snapshotGap;
+    }
 }

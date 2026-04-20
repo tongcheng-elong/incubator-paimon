@@ -508,7 +508,9 @@ public class FileStoreCommitImpl implements FileStoreCommit {
             long commitDuration = (System.nanoTime() - started) / 1_000_000;
             long snapshotGap = 0;
             try {
-                snapshotGap = snapshotManager.latestSnapshot().id() - snapshotManager.earliestSnapshot().id();
+                snapshotGap =
+                        snapshotManager.latestSnapshot().id()
+                                - snapshotManager.earliestSnapshot().id();
             } catch (Exception e) {
                 LOG.warn("Failed to compute snapshot gap for " + committable.identifier(), e);
             }

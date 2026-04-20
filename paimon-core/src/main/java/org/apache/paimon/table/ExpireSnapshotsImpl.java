@@ -32,7 +32,6 @@ import org.apache.paimon.utils.TagManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
@@ -150,8 +149,7 @@ public class ExpireSnapshotsImpl implements ExpireSnapshots {
         }
 
         if (LOG.isInfoEnabled()) {
-            LOG.info(
-                    "Snapshot expire range is [" + beginInclusiveId + ", " + endExclusiveId + ")");
+            LOG.info("Snapshot expire range is [" + beginInclusiveId + ", " + endExclusiveId + ")");
         }
 
         List<Snapshot> taggedSnapshots = tagManager.taggedSnapshots();
@@ -163,7 +161,14 @@ public class ExpireSnapshotsImpl implements ExpireSnapshots {
             if (LOG.isInfoEnabled()) {
                 LOG.info("Ready to delete merge tree files not used by snapshot #" + id);
             }
-            Snapshot snapshot = snapshotManager.snapshot(id);
+            Snapshot snapshot = null;
+            try {
+                snapshot = snapshotManager.snapshot(id);
+            } catch (Exception e) {
+                beginInclusiveId = id + 1;
+                LOG.warn("Skip clean snapshot: ", e);
+                continue;
+            }
             // expire merge tree files and collect changed buckets
             Predicate<ManifestEntry> skipper;
             try {
