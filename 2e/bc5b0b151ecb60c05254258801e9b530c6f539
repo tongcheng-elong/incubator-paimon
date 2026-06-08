@@ -1,0 +1,18 @@
+paimon-core/src/main/java/org/apache/paimon/operation/metrics/CommitMetrics.java
+  h_f6e677c8b49563 47,81
+paimon-core/src/main/java/org/apache/paimon/operation/metrics/CommitStats.java
+  h_f6e677c8b49563 38-39,64,67,101,117-118
+paimon-core/src/main/java/org/apache/paimon/operation/FileStoreCommitImpl.java
+  h_f6e677c8b49563 376,379,390,393,400,403,407,414-416,556,559
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2ebc5b0b151ecb60c05254258801e9b530c6f539",
+  "prompts": {},
+  "humans": {
+    "h_f6e677c8b49563": {
+      "author": "wxp4532 <wxp4532@ly.com>"
+    }
+  }
+}
