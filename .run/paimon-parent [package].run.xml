@@ -13,6 +13,8 @@
             <list>
               <option value="clean" />
               <option value="install" />
+              <option value="-T" />
+              <option value="1C" />
               <option value="-DskipTests" />
               <option value="-Dcheckstyle.skip=true" />
               <option value="-Drat.skip=true" />
