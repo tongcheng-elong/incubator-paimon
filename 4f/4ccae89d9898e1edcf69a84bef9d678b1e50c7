@@ -1,0 +1,14 @@
+".run/paimon-parent [package].run.xml"
+  h_f6e677c8b49563 16-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "4f4ccae89d9898e1edcf69a84bef9d678b1e50c7",
+  "prompts": {},
+  "humans": {
+    "h_f6e677c8b49563": {
+      "author": "wxp4532 <wxp4532@ly.com>"
+    }
+  }
+}
