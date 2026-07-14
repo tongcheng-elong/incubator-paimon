@@ -3105,6 +3105,10 @@ public class CoreOptions implements Serializable {
         return options.get(BUCKET);
     }
 
+    public boolean supportDeleteByType() {
+        return options.get(SUPPORT_DELETE_BY_TYPE);
+    }
+
     public BucketFunctionType bucketFunctionType() {
         return options.get(BUCKET_FUNCTION_TYPE);
     }
