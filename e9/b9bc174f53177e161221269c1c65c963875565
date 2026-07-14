@@ -1,0 +1,14 @@
+paimon-api/src/main/java/org/apache/paimon/CoreOptions.java
+  h_f6e677c8b49563 2815-2818
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "e9b9bc174f53177e161221269c1c65c963875565",
+  "prompts": {},
+  "humans": {
+    "h_f6e677c8b49563": {
+      "author": "wxp4532 <wxp4532@ly.com>"
+    }
+  }
+}
