@@ -1,0 +1,14 @@
+paimon-core/src/main/java/org/apache/paimon/io/SingleFileWriter.java
+  h_f6e677c8b49563 83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "cf0ba6280284fb6bea51c52ea83accdba4b991a0",
+  "prompts": {},
+  "humans": {
+    "h_f6e677c8b49563": {
+      "author": "wxp4532 <wxp4532@ly.com>"
+    }
+  }
+}
