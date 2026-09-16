@@ -467,16 +467,21 @@ public class FlinkOrphanFilesClean extends OrphanFilesClean {
             }
         }
 
-        return sum(result);
+        String jobName =
+                String.format(
+                        "OrphanFilesClean-%s.%s",
+                        databaseName, tableName == null ? "*" : tableName);
+        return sum(result, jobName);
     }
 
-    private static CleanOrphanFilesResult sum(DataStream<CleanOrphanFilesResult> deleted) {
+    private static CleanOrphanFilesResult sum(
+            DataStream<CleanOrphanFilesResult> deleted, String jobName) {
         long deletedFilesCount = 0;
         long deletedFilesLenInBytes = 0;
         if (deleted != null) {
             try {
                 CloseableIterator<CleanOrphanFilesResult> iterator =
-                        deleted.global().executeAndCollect("OrphanFilesClean");
+                        deleted.global().executeAndCollect(jobName);
                 while (iterator.hasNext()) {
                     CleanOrphanFilesResult cleanOrphanFilesResult = iterator.next();
                     deletedFilesCount += cleanOrphanFilesResult.getDeletedFileCount();
