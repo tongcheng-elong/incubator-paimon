@@ -129,10 +129,20 @@ public class HiveCatalogLock implements CatalogLock {
         if (lockId <= 0) {
             return;
         }
+        // A canceled task may leave the committing thread interrupted. The unlock RPC must
+        // be sent before the lock is abandoned, so clear the flag and restore it afterwards.
+        boolean interrupted = Thread.interrupted();
         try {
             clients.execute(client -> client.unlock(lockId));
+        } catch (InterruptedException e) {
+            interrupted = true;
+            LOG.warn("Unlock interrupted for lockId={}", lockId, e);
         } catch (Exception e) {
             LOG.warn("Unlock failed for lockId={}", lockId, e);
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
